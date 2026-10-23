@@ -1,0 +1,20 @@
+{
+  "source_worker": "vendor/gpu_parser_worker.py",
+  "worker_sha256": "4425a449b0ff3412df24afd7839344ff13ffee9cf8cb91656f0d965e083921d0",
+  "models": {
+    "MinerU-4_models_torch/.mineru_complete": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "MinerU-4_models_torch/Layout/PP-DocLayoutV2/config.json": "18a696b54c64c4fa582afcd3a41407c4b65a99dc7ab187ad2fed8af8e4128ad8",
+    "MinerU-4_models_torch/Layout/PP-DocLayoutV2/inference.yml": "93100e0fb2cd76b9d246a853deea85e191d8333b2cfca7be76e82e4c4ebfa819",
+    "MinerU-4_models_torch/Layout/PP-DocLayoutV2/model.safetensors": "e60f3725aeedc88fd319416ef166bda79171a41516a301c27cab9132dc2739d2",
+    "MinerU-4_models_torch/Layout/PP-DocLayoutV2/preprocessor_config.json": "56281a70c931a291dcaf653605fb4df713fd823f65e939aecd6005c26346a103",
+    "MinerU-4_models_torch/MFR/pp_formulanet_plus_m/PP-FormulaNet_plus-M.pth": "bd9d40fd9c7759805e93cb54f14f5e91448a80b14aadc2bfb25c4c948b2974e8",
+    "MinerU-4_models_torch/MFR/pp_formulanet_plus_m/PP-FormulaNet_plus-M_inference.yml": "e57ba132b657d08d52d6c19bee94f1eefe12190fddc23e9b1f6a54b8f31e051f",
+    "MinerU-4_models_torch/OCR/paddleocr/ch_PP-OCRv6_small_rec_infer.safetensors": "f65a332afe5aa663f0b9d5706f4ae8457b5b4058a842d5c1eb22df505c27d642",
+    "MinerU-4_models_torch/OCR/paddleocr/ch_PP-OCRv6_tiny_det_infer.safetensors": "cae3c88d2a9902fd0293e6b17990428f54bfa7ec98f800a4368e95423a754d16",
+    "MinerU-4_models_torch/OCR/paddleocr/seal_PP-OCRv4_det_infer.pth": "a7777ca66448ab90948ce5a3257e4c959d6eacf0489fbadd5133dbe8f89662ae",
+    "MinerU-4_models_torch/README.md": "98b45ea81164d1e1a1dd82255207053b15cd6c69d922a1c5cf3387ce604d4b74",
+    "MinerU-4_models_torch/Table/PP-LCNet_x1_0_table_cls.onnx": "c84bf1d79c1c74d534b5b12adb14dd12151c42f7ae3e4be4f1042b830f80b949",
+    "MinerU-4_models_torch/Table/slanet-plus.onnx": "d57a942af6a2f57d6a4a0372573c696a2379bf5857c45e2ac69993f3b334514b",
+    "MinerU-4_models_torch/Table/unet.onnx": "0ea48d3a17e35ef5c2e498a5e799566073234d39b1079ca21d9f4fafe73c6d20"
+  }
+}

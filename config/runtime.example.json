@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "coordinator_python": "../env-coordinator/bin/python",
+  "parser_python": "../env-mineru/bin/python",
+  "model_path": "../models",
+  "authorized_gpu": "0",
+  "device_files": null,
+  "chunk_size": 50,
+  "max_retries": 1,
+  "worker_timeout_seconds": 14400
+}
