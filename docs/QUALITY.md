@@ -10,11 +10,13 @@
 
 ## Processing And Records
 
-The offline MinerU backend performs layout and mathematical recognition. Neural text recognition and scan OCR are disabled by the runtime policy. Automatic prose repairs require a unique source-text match; ambiguous cases remain recorded for inspection. Source images preserve pixels rather than editable text.
+The GPU MinerU backend performs layout and mathematical recognition. The CPU PyMuPDF4LLM/Layout backend uses native text and layout without mathematical recognition. Both disable scan/text OCR. Their outputs may differ. Automatic prose repairs require a unique source-text match; ambiguous cases remain recorded for inspection. Source images preserve pixels rather than editable text.
 
 The intermediate sequence is `worker_manual.md` -> `native_before_source_text.md` -> `native_manual.md` -> `manual.md`. Source additions and repairs are recorded in `source_glyphs.json`, `source_text_pages.json` and `change_log.json`. `provenance.json` records input and model hashes, page mapping and processing history. Attempt logs remain under `_work/`.
 
 For normal reading, keep `manual.md` and `assets/` together. Keep the full result directory for verification, diagnosis and resume.
+
+New outputs include `source_map.json` for object-level source lookup. `trace` returns the original page/region, source and output excerpts, association basis and ambiguity state. This reduces source-location work during verification; a located object can still contain a wrong number or operator. See [source mapping](SOURCE_MAPPING.md). No visual review page or additional risk queue is generated.
 
 ## Licensing
 

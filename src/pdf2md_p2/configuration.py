@@ -21,19 +21,26 @@ POLICY = {
 }
 DEFAULTS = {'chunk_size': 50, 'max_retries': 1, 'worker_timeout_seconds': 14400}
 PATHS = ('coordinator_python', 'parser_python', 'model_path')
+CPU_POLICY = {**POLICY, 'engine': 'PyMuPDF4LLM', 'version': '1.28.2',
+              'profile': 'pdf2md-cpu-native-no-ocr-0.1',
+              'legacy_builtin_detection_and_formula_recognition': 'CPU_LAYOUT_NO_MATH_RECOGNIZER'}
 DEVICE = re.compile(r'/dev/nvidia(?:[0-9]+|ctl|-uvm|-uvm-tools)|/dev/nvidia-caps/nvidia-cap[0-9]+')
 GPU = re.compile(r'(?:GPU|MIG)-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}')
 
 
 def validate(data, base=None):
-    allowed = set(POLICY) | set(DEFAULTS) | set(PATHS) | {'authorized_gpu', 'device_files', 'bubblewrap_path'}
+    allowed = set(POLICY) | set(DEFAULTS) | set(PATHS) | {'authorized_gpu', 'device_files', 'bubblewrap_path',
+        'compute', 'resolved_compute', 'cpu_python', 'selection_reason'}
     unknown = set(data) - allowed
     if unknown:
         raise ValueError('Unknown runtime settings: ' + ', '.join(sorted(unknown)))
-    for key, value in POLICY.items():
+    if data.get('compute', 'auto') not in ('auto', 'cpu', 'cuda') or data.get('resolved_compute', 'cuda') not in ('cpu', 'cuda'):
+        raise ValueError('compute must be auto, cpu or cuda; resolved_compute must be cpu or cuda')
+    policy = CPU_POLICY if data.get('resolved_compute') == 'cpu' else POLICY
+    for key, value in policy.items():
         if key in data and (type(data[key]) is not type(value) or data[key] != value):
             raise ValueError('Unsupported engine/policy setting: ' + key)
-    result = {**POLICY, **DEFAULTS, 'authorized_gpu': '0', 'device_files': None, **data}
+    result = {**policy, **DEFAULTS, 'authorized_gpu': '0', 'device_files': None, **data}
     for key in PATHS:
         value = result.get(key)
         if not isinstance(value, str) or not value.strip():
@@ -43,12 +50,18 @@ def validate(data, base=None):
             path = Path(base or Path.cwd()) / path
         # Resolving a venv's bin/python symlink would silently select the base interpreter.
         result[key] = os.path.abspath(path)
-    if result.get('bubblewrap_path') is not None:
-        value = result['bubblewrap_path']
+    for optional in ('bubblewrap_path', 'cpu_python'):
+        if result.get(optional) is None:
+            continue
+        value = result[optional]
         if not isinstance(value, str) or not value.strip():
-            raise ValueError('bubblewrap_path must be an executable path')
+            raise ValueError(optional + ' must be an executable path')
         path = Path(value).expanduser()
-        result['bubblewrap_path'] = os.path.abspath(path if path.is_absolute() else Path(base or Path.cwd()) / path)
+        result[optional] = os.path.abspath(path if path.is_absolute() else Path(base or Path.cwd()) / path)
+    if result.get('resolved_compute') == 'cpu':
+        if result['device_files'] != [] or result['authorized_gpu'] != '0':
+            raise ValueError('CPU profile must not authorize GPU devices')
+        return _validate_numbers(result)
     selector = result['authorized_gpu']
     if not isinstance(selector, str) or not (GPU.fullmatch(selector) or re.fullmatch(r'0|[1-9][0-9]*', selector)):
         raise ValueError('Use a nonnegative visible GPU index or a full GPU-UUID or MIG-UUID')
@@ -186,7 +199,7 @@ def find_config():
     return next((path for path in candidates if path.is_file()), None)
 
 
-def load(path=None, overrides=None):
+def load(path=None, overrides=None, resolve=True):
     path = Path(path).expanduser().resolve() if path is not None else find_config()
     defaults = default_paths()
     data = read(path) if path is not None else {}
@@ -195,7 +208,9 @@ def load(path=None, overrides=None):
     overrides = {key: value for key, value in (overrides or {}).items() if value is not None}
     if 'bubblewrap_path' not in overrides and not data.get('bubblewrap_path') and os.environ.get('PDF2MD_BWRAP'):
         overrides['bubblewrap_path'] = os.environ['PDF2MD_BWRAP']
-    for key in (*PATHS, 'bubblewrap_path'):
+    if 'cpu_python' not in overrides and not data.get('cpu_python') and os.environ.get('PDF2MD_CPU_PYTHON'):
+        overrides['cpu_python'] = os.environ['PDF2MD_CPU_PYTHON']
+    for key in (*PATHS, 'bubblewrap_path', 'cpu_python'):
         if key in overrides:
             overrides[key] = os.path.abspath(Path(overrides[key]).expanduser())
     if 'authorized_gpu' in overrides and 'device_files' not in overrides:
@@ -203,7 +218,7 @@ def load(path=None, overrides=None):
     config = validate({**defaults, **data, **overrides}, path.parent if path else Path.cwd())
     if not config.get('bubblewrap_path') and shutil.which('bwrap'):
         config['bubblewrap_path'] = os.path.abspath(shutil.which('bwrap'))
-    return resolve_device(config)
+    return resolve_device(config) if resolve else config
 
 
 def initial(parser_python=None, models=None, gpu='0', devices=None, coordinator_python=None):

@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 PATH_OPTIONS = {'--input', '--input-dir', '--output-dir', '--config', '--models', '--report',
-                '--native-cache', '--parser-python', '--coordinator-python', '--bwrap'}
+                '--native-cache', '--parser-python', '--coordinator-python', '--cpu-python', '--render-dir', '--bwrap'}
 
 
 def linux_path(value, cwd):
@@ -85,7 +85,7 @@ def main():
     for key, value in forwarded.items():
         os.environ[key] = interpreter_path(value, cwd) if key == 'PDF2MD_WSL_PYTHON' else linux_path(value, cwd) if key in {
             'PDF2MD_CONFIG', 'PDF2MD_MODELS', 'PDF2MD_BWRAP', 'PDF2MD_PARSER_PYTHON',
-            'PDF2MD_WSL_PYTHON'} else value
+            'PDF2MD_WSL_PYTHON', 'PDF2MD_CPU_PYTHON'} else value
     product = Path(__file__).resolve().parents[1]
     args = translate(args, cwd)
     python = select_python(interpreter_path(explicit, cwd) if explicit != '-' else None, args, product)

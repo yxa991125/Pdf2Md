@@ -16,9 +16,24 @@ from .configuration import load as load_config, validate as validate_config, ini
 
 
 def runtime(args):
-    return load_config(args.config, {key: getattr(args, option, None) for key, option in (
+    config = load_config(args.config, {key: getattr(args, option, None) for key, option in (
         ('parser_python', 'parser_python'), ('model_path', 'models'),
-        ('authorized_gpu', 'gpu'), ('device_files', 'device'), ('bubblewrap_path', 'bwrap'))})
+        ('authorized_gpu', 'gpu'), ('device_files', 'device'), ('bubblewrap_path', 'bwrap'),
+        ('compute', 'compute'), ('cpu_python', 'cpu_python'))}, resolve=False)
+    if config.get('compute') == 'cpu' and (getattr(args, 'gpu', None) or getattr(args, 'device', None)):
+        raise ValueError('CPU mode conflicts with explicit GPU authorization arguments')
+    pinned = None
+    if getattr(args, 'resume', False):
+        batch = hasattr(args, 'input_dir')
+        source = args.input_dir if batch else args.input
+        output = (args.output_dir or default_output(source, batch=batch)).resolve()
+        path = output / ('batch_configuration.json' if batch else 'configuration.json')
+        if path.is_file():
+            previous = read(path)
+            pinned = previous['runtime' if batch else 'configuration']
+    from .backends import select
+    config, args.backend_availability = select(config, pinned, probe_all=getattr(args, 'command', None) == 'doctor')
+    return config
 
 
 def default_output(source, batch=False):
@@ -51,6 +66,7 @@ def convert(args):
             raise ValueError('Output exists; use a new directory or explicit --resume')
         from .environment import inspect
         environment = inspect(config)
+        environment['backend_availability'] = getattr(args, 'backend_availability', {})
         if not environment['ready_for_conversion']:
             print(json.dumps(environment, ensure_ascii=False, indent=2), file=sys.stderr)
             return 1
@@ -88,6 +104,9 @@ def convert(args):
         if not args.resume or read(output / 'run_manifest.json')['configuration'] != binding:
             raise ValueError('Sealed result/configuration cannot be overwritten')
         verify(output)
+        if (output / 'source_map.json').is_file():
+            from .source_map import validate
+            validate(output)
         print(__import__('json').dumps({'status': 'REUSED_VERIFIED', 'output': str(output)}), flush=True)
         return 0
     import fcntl
@@ -104,12 +123,14 @@ def convert(args):
             save(output / 'input_preflight.json', inspection)
             if not inspection['supported']:
                 raise ValueError('OUT_OF_SCOPE_NATIVE_TEXT_LAYER_REQUIRED; no OCR fallback')
-            lock_data = read(PRODUCT / 'config/baseline_bindings.json')
-            if sha(PRODUCT / 'vendor/gpu_parser_worker.py') != lock_data['worker_sha256']:
-                raise ValueError('Frozen B3 worker changed')
-            changed_models = [r for r, h in lock_data['models'].items() if sha(Path(config['model_path']) / r) != h]
-            if changed_models:
-                raise ValueError('Frozen offline model bytes changed')
+            cpu = config.get('resolved_compute') == 'cpu'
+            lock_data = read(PRODUCT / ('config/cpu_bindings.json' if cpu else 'config/baseline_bindings.json'))
+            if not cpu:
+                if sha(PRODUCT / 'vendor/gpu_parser_worker.py') != lock_data['worker_sha256']:
+                    raise ValueError('Frozen B3 worker changed')
+                changed_models = [r for r, h in lock_data['models'].items() if sha(Path(config['model_path']) / r) != h]
+                if changed_models:
+                    raise ValueError('Frozen offline model bytes changed')
             (output / 'assets').mkdir(exist_ok=True)
             if args.native_cache:
                 from .native_cache import load
@@ -135,11 +156,14 @@ def convert(args):
             save(output / 'object_checks.json', object_checks)
             quantity_checks = check_quantities(pdf, text)
             save(output / 'quantity_checks.json', quantity_checks)
+            from .source_map import build as build_source_map
+            mapping = build_source_map(pdf, output, chunks)
             content_gaps = empty_content_pages(inspection, text)
             glyph_gaps = [event for event in policy_events if event['kind'] == 'NATIVE_GLYPH_UNRESOLVED_NO_OCR']
             complete = list(page_parts(text)) == list(range(1, inspection['pages'] + 1)) and not failures and not content_gaps and not glyph_gaps
             status = 'SUCCESS_WITH_WARNINGS' if complete else ('PARTIAL' if chunks else 'FAILED')
             quality = {'status': status, 'version': __version__, 'completed_pages': list(page_parts(text)),
+                       'compute': config.get('resolved_compute', 'cuda'), 'source_mapping_states': mapping['states'],
                        'release_level': 'ENGINEERING_TEST_PROTOTYPE', 'semantic_fidelity_certified': False,
                        'expected_pages': inspection['pages'], 'failed_chunks': failures, 'assets': images,
                        'empty_source_content_pages': content_gaps,
@@ -169,13 +193,16 @@ def convert(args):
                  'native_inference_performed_this_run': not bool(args.native_cache),
                  'page_mapping': {str(p): p for p in page_parts(text)}, 'chunks': chunks,
                  'runtime_access_probe': probes, 'network': 'bubblewrap_unshared',
-                 'native_worker_sha256': lock_data['worker_sha256'], 'model_bindings': lock_data['models'],
+                 'native_worker_sha256': sha(PRODUCT / 'scripts/cpu_worker.py') if cpu else lock_data['worker_sha256'],
+                 'model_bindings': lock_data['resources'] if cpu else lock_data['models'],
+                 'compute': config.get('resolved_compute', 'cuda'), 'engine': config['engine'],
+                 'requested_compute': config.get('compute', 'auto'), 'selection_reason': config.get('selection_reason'),
                  'neural_text_OCR': 'DENIED_BY_RUNTIME_POLICY',
                  'source_graphic_pages': read(output / 'source_graphics.json')['pages'],
                  'source_glyph_images': glyph_records,
                  'source_only_text_pages': text_page_records,
                  'Gold_or_scorer_dependency': False, 'S1_S2_enabled': False,
-                 'applied_repairs': changes['operations'], 'baseline_configuration': 'P1 S0-B3 unchanged worker; explicit P2 txt profile and source-bound prose repairs',
+                 'applied_repairs': changes['operations'], 'baseline_configuration': config['profile'],
                  'native_builtin_recognition': config['legacy_builtin_detection_and_formula_recognition']})
             save(output / 'run_status.json', {'status': status, 'at': datetime.now(timezone.utc).isoformat()})
             if complete:
@@ -207,6 +234,8 @@ def main():
     p.add_argument('--device', action='append', help='Override detected device nodes; repeat for each node; required for MIG')
     p.add_argument('--coordinator-python', default=sys.executable)
     p.add_argument('--bwrap', help='Path to bubblewrap executable')
+    p.add_argument('--compute', choices=['auto', 'cpu', 'cuda'], default='auto')
+    p.add_argument('--cpu-python', help='CPU backend Python (default: coordinator Python)')
     p = sub.add_parser('doctor', help='Check pinned environments, model hashes, device permissions and network isolation; no inference')
     runtime_options(p)
     p.add_argument('--report', type=Path)
@@ -214,6 +243,13 @@ def main():
     p.add_argument('--input', type=Path, required=True)
     p = sub.add_parser('verify', help='Verify a completed output seal and all local image references, not semantic fidelity')
     p.add_argument('--output-dir', type=Path, required=True)
+    p = sub.add_parser('trace', help='Query source locations for a final Markdown object or line; JSON output')
+    p.add_argument('--output-dir', type=Path, required=True)
+    query = p.add_mutually_exclusive_group(required=True)
+    query.add_argument('--object-id')
+    query.add_argument('--line', type=int)
+    p.add_argument('--input', type=Path, help='Exact original PDF, required only for source screenshots')
+    p.add_argument('--render-dir', type=Path, help='New external directory for requested source screenshots')
     p = sub.add_parser('batch', help='Convert a local PDF directory sequentially, preserving failures and per-run logs')
     runtime_options(p)
     p.add_argument('--input-dir', type=Path, required=True)
@@ -238,6 +274,9 @@ def main():
             if args.config.exists():
                 raise ValueError('Config exists; refusing overwrite')
             data = initial(args.parser_python, args.models, args.gpu, args.device, args.coordinator_python)
+            data['compute'] = args.compute
+            if args.cpu_python:
+                data['cpu_python'] = args.cpu_python
             if args.bwrap:
                 data['bubblewrap_path'] = args.bwrap
             data = validate_config(data, args.config.resolve().parent)
@@ -246,9 +285,15 @@ def main():
             return 0
         if args.command == 'doctor':
             from .environment import inspect
+            from .backends import NoBackendAvailable
             if args.report and args.report.exists():
                 raise ValueError('Report exists; use a new report path')
-            result = inspect(runtime(args))
+            try:
+                result = inspect(runtime(args))
+                result['backend_availability'] = getattr(args, 'backend_availability', {})
+            except NoBackendAvailable as exc:
+                result = {'ready_for_conversion': False, 'backend_availability': exc.reports,
+                          'selection_reason': 'NO_PREPARED_BACKEND', 'GPU_inference_performed': False}
             if args.report:
                 save(args.report, result)
             print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -266,8 +311,20 @@ def main():
             if quality['completed_pages'] != list(range(1, quality['expected_pages'] + 1)):
                 raise ValueError('Incomplete physical page sequence')
             assets = check((output / 'manual.md').read_text(encoding='utf-8'), output)
+            mapping = None
+            if (output / 'source_map.json').is_file():
+                from .source_map import validate
+                mapping = validate(output)['states']
+            elif read(output / 'run_manifest.json')['configuration'].get('version') == '0.1.0a3':
+                raise ValueError('New-version result is missing source_map.json')
             print(json.dumps({'integrity_passed': True, 'pages': quality['expected_pages'],
-                'image_references': len(assets), 'semantic_fidelity_certified': False}))
+                'image_references': len(assets), 'source_mapping_states': mapping, 'semantic_fidelity_certified': False}))
+            return 0
+        if args.command == 'trace':
+            from .source_map import trace
+            result = trace(args.output_dir.resolve(), args.object_id, args.line,
+                args.input.resolve() if args.input else None, args.render_dir.resolve() if args.render_dir else None)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         if args.command == 'batch':
             from .batch import convert_directory
@@ -281,6 +338,8 @@ def main():
 
 
 def runtime_options(parser):
+    parser.add_argument('--compute', choices=['auto', 'cpu', 'cuda'], help='Compute mode (default: auto)')
+    parser.add_argument('--cpu-python', help='CPU backend Python (default: PDF2MD_CPU_PYTHON or coordinator Python)')
     parser.add_argument('--bwrap', help='Bubblewrap executable (default: PDF2MD_BWRAP or PATH)')
     parser.add_argument('--config', type=Path, help='Config JSON (default: discover runtime.local.json or user config)')
     parser.add_argument('--parser-python', help='Override MinerU Python (default: current interpreter)')

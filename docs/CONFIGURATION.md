@@ -4,7 +4,20 @@
 
 ## Environment Setup
 
-Use Linux, Python 3.12, an NVIDIA driver and bubblewrap (`bwrap`) with user/network namespace support.
+Use Linux/WSL2, Python 3.12 and bubblewrap (`bwrap`) with user/network namespace support. GPU execution additionally needs NVIDIA CUDA support. Windows uses the PowerShell WSL2 launcher.
+
+### CPU-Only Setup
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-cpu.txt
+python scripts/pdf2md.py convert --input ../manual.pdf
+```
+
+This environment includes the coordinator and the pinned CPU backend. CUDA, MinerU and a separate GPU model directory are not required. The pinned Layout wheel includes its model resources; conversion does not download weights. For offline installation, add `--no-index` and `--find-links /path/to/wheelhouse` to the installation command.
+
+### GPU Setup
 
 The coordinator and MinerU backend can share one Python environment, or you can reuse a separate backend environment. Coordinator dependencies are in `requirements-coordinator.txt`; the reference backend inventory is `config/s1-mineru-requirements.lock.txt`. Backend version checks include MinerU 4.0.12, torch 2.14.1, torchvision 0.29.1 and pypdfium2 5.14.0. Use packages compatible with your GPU and driver.
 
@@ -46,6 +59,12 @@ Drive paths, Windows relative paths and WSL absolute paths are accepted for inpu
 Bubblewrap lookup: `--bwrap`, config `bubblewrap_path`, `PDF2MD_BWRAP`, then PATH. A user-local executable is mounted read-only into the nested sandbox, not its parent directory. WSL uses `/dev/dxg` and `/usr/lib/wsl/lib`; missing devices, permissions or driver libraries fail explicitly. The worker keeps `--unshare-all` and fresh `/proc`. Reports bind platform, driver inventory, GPU UUID, bubblewrap bytes/version and WSL libcuda bytes into the environment fingerprint. Changed environment/code/config/input requires a new run; a1 caches are not interchangeable with a2.
 
 ## Runtime Overrides
+
+`--compute auto` (default) selects a prepared GPU first, otherwise a prepared CPU backend. `--compute cpu` never uses GPU devices; `--compute cuda` fails rather than falling back. Invalid configuration and binding integrity failures are errors, not fallback reasons. Runtime failures do not switch backends. A batch selects its backend once.
+
+Keep existing GPU environments unchanged. To add CPU support alongside one, prepare a separate environment with `requirements-cpu.txt`, then set `cpu_python` in the runtime config, `PDF2MD_CPU_PYTHON`, or `--cpu-python /path/to/env-cpu/bin/python`. Precedence is CLI > config > environment > coordinator Python. CPU coordinators accept the pinned PyMuPDF 1.28.2; an existing 1.26.0 coordinator can also run a separate 1.28.2 CPU worker. GPU coordinators retain 1.26.0.
+
+`doctor` reports CPU/GPU availability and selection reasons. No available backend triggers installation automatically. Resume and cache reuse retain the original selected backend and bindings; changing compute mode requires a new output. The existing repeated `--device /dev/...` option still authorizes GPU nodes; it is not a compute-mode flag. Windows also translates `--cpu-python` and `--render-dir`, and forwards `PDF2MD_CPU_PYTHON`.
 
 ```bash
 python scripts/pdf2md.py convert --input ../manual.pdf \

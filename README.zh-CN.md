@@ -4,7 +4,7 @@
 
 [更新日志](CHANGELOG.md)
 
-版本：**0.1.0a2**。通过命令行在本地离线将原生电子 PDF 转成 `manual.md + assets/`。
+版本：**0.1.0a3**。在本地离线将原生电子 PDF 转成 `manual.md + assets/`，并提供便于核验的来源定位。支持 GPU 和 CPU 运行。
 
 ## 快速开始
 
@@ -24,6 +24,16 @@ Windows 完成一次 WSL2 环境准备后，可直接在 PowerShell 中运行，
 结果保存在 PDF 同目录的 `manual_pdf2md/` 中，打开其中的 `manual.md` 即可。移动结果时一起保留 `assets/`。
 
 转换会自动执行环境检查、PDF 预检和输出完整性检查，无需另行运行 `doctor`、`preflight` 或 `verify`。
+
+GPU 环境可用时优先使用 GPU，否则使用已准备好的 CPU 后端。CPU-only 安装不需要 CUDA 或 MinerU；可通过 `--compute cpu` 或 `--compute cuda` 明确选择。
+
+## 来源查询
+
+```bash
+python scripts/pdf2md.py trace --output-dir ../manual_pdf2md --line 25
+```
+
+`source_map.json` 为最终输出对象建立索引。查询返回 JSON，包括输出片段、原 PDF 页码和区域、原文及关联依据。截图按需生成，不附带可视化页面或全文截图。详见[来源映射说明](docs/SOURCE_MAPPING.zh-CN.md)。
 
 ## 常用操作
 
@@ -46,6 +56,7 @@ python scripts/pdf2md.py convert --help
 | 配置 | 默认行为 |
 | --- | --- |
 | GPU | 第一个可见 GPU，自动确定设备节点 |
+| 计算模式 | `auto`：GPU 可用则优先使用，否则选择已准备好的 CPU 后端 |
 | 后端 Python | 当前 Python 环境 |
 | 模型目录 | 源码目录旁的 `models/` |
 | 输出目录 | 输入旁的 `<文件名或目录名>_pdf2md/` |
@@ -59,7 +70,7 @@ python scripts/pdf2md.py convert --help
 
 ## 适用范围
 
-原生 Linux 或单 NVIDIA GPU 的 WSL2、Python 3.12 和 bubblewrap。Windows 通过 WSL2 执行，不使用原生 Windows 推理。支持原生电子 PDF，包含其中的纯矢量图页；不支持扫描文字或 OCR。后端为 MinerU 4.0.12，使用锁定的离线模型。多 GPU、MIG 仅支持原生 Linux。
+Linux 或 WSL2、Python 3.12 和 bubblewrap。Windows 通过 WSL2 执行，不使用原生 Windows 推理。支持原生电子 PDF，包含其中的纯矢量图页；不支持扫描文字或 OCR。GPU 后端为 MinerU 4.0.12，CPU 后端为 PyMuPDF4LLM/Layout 1.28.2，两者结果可能不同。WSL GPU 路径仅支持单 NVIDIA GPU；多卡选择及 MIG 保留为原生 Linux 场景。
 
 ## 结果检查
 

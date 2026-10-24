@@ -54,19 +54,23 @@ def infer(pdf, output, total, config, binding, inspection=None):
                     if result.returncode:
                         raise RuntimeError('Worker return code ' + str(result.returncode))
                     meta = read(attempt / 'native_output/worker_manifest.json')
+                    cpu = config.get('resolved_compute') == 'cpu'
+                    compute_valid = (meta.get('compute') == 'cpu' and meta.get('cpu_execution_verified') is True
+                                     and meta.get('GPU_inference_performed') is False) if cpu else (
+                        meta.get('cuda_visible_devices') == config['authorized_gpu'] and meta.get('gpu_compute_verified'))
                     if (meta['status'] != 'success' or meta['pages'] != wanted
-                            or meta['cuda_visible_devices'] != config['authorized_gpu']
-                            or not meta['gpu_compute_verified'] or meta['parser_version'] != config['version']
+                            or not compute_valid or meta['parser_version'] != config['version']
                             or sha(attempt / 'markdown/document.md') != meta['markdown_sha256']
                             or sha(attempt / 'native_output/native.json') != meta['native_sha256']):
                         raise ValueError('Unbound or unauthorized native output')
                     if list(page_parts((attempt / 'markdown/document.md').read_text())) != wanted:
                         raise ValueError('Native chunk incomplete')
-                    native_pages = read(attempt / 'native_output/native.json')['pages']
-                    for record in native_pages:
-                        middle = read(attempt / record['middle_json'])
-                        if middle['extensions']['mineru']['parse_mode'] != 'txt':
-                            raise ValueError('Native-only profile returned a non-txt page')
+                    if not cpu:
+                        native_pages = read(attempt / 'native_output/native.json')['pages']
+                        for record in native_pages:
+                            middle = read(attempt / record['middle_json'])
+                            if middle['extensions']['mineru']['parse_mode'] != 'txt':
+                                raise ValueError('Native-only profile returned a non-txt page')
                     mode = read(attempt / 'native_output/p2_runtime_config.json')
                     if mode['effective_configuration']['parse_mode'] != 'txt':
                         raise ValueError('Native profile guard missing or inconsistent')

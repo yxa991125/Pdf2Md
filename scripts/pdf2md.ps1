@@ -30,7 +30,7 @@ try {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $forwarded = @{}
     foreach ($name in @('PDF2MD_CONFIG', 'PDF2MD_MODELS', 'PDF2MD_BWRAP',
-        'PDF2MD_PARSER_PYTHON', 'PDF2MD_WSL_PYTHON', 'CUDA_VISIBLE_DEVICES')) {
+        'PDF2MD_PARSER_PYTHON', 'PDF2MD_CPU_PYTHON', 'PDF2MD_WSL_PYTHON', 'CUDA_VISIBLE_DEVICES')) {
         $setting = [Environment]::GetEnvironmentVariable($name)
         if ($null -ne $setting) { $forwarded[$name] = $setting }
     }

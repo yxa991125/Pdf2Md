@@ -4,7 +4,7 @@
 
 [Changelog](CHANGELOG.md)
 
-Version: **0.1.0a2**. Convert native electronic PDFs to `manual.md + assets/` through a local, offline command-line workflow.
+Version: **0.1.0a3**. Convert native electronic PDFs to `manual.md + assets/`, with source locations for verification. Supports GPU and CPU execution.
 
 ## Quick Start
 
@@ -24,6 +24,16 @@ On Windows, use PowerShell with WSL2 after the one-time WSL environment setup. W
 Results are saved to `manual_pdf2md/` beside the PDF. Open `manual.md` and keep `assets/` alongside it when moving the result.
 
 Conversion automatically runs environment checks, PDF preflight and output integrity checks. Separate `doctor`, `preflight` and `verify` commands are optional.
+
+GPU is selected when ready; otherwise a prepared CPU backend is used. CPU-only setup does not require CUDA or MinerU. Use `--compute cpu` or `--compute cuda` to select explicitly.
+
+## Source Lookup
+
+```bash
+python scripts/pdf2md.py trace --output-dir ../manual_pdf2md --line 25
+```
+
+`source_map.json` indexes final output objects. Queries return JSON with the output excerpt, original PDF page/region, source text and association basis. Optional screenshots are generated only when requested; no viewer or full-document screenshot export is created. See [source mapping](docs/SOURCE_MAPPING.md).
 
 ## Common Commands
 
@@ -46,6 +56,7 @@ python scripts/pdf2md.py convert --help
 | Setting | Default |
 | --- | --- |
 | GPU | First visible GPU; detect device nodes automatically |
+| Compute | `auto`: ready GPU first, otherwise a prepared CPU backend |
 | Backend Python | Current Python environment |
 | Models | `models/` beside the source directory |
 | Output | `<file-stem-or-directory-name>_pdf2md/` beside the input |
@@ -59,7 +70,7 @@ For custom model paths, separate backend environments, multiple GPUs or MIG, see
 
 ## Supported Inputs
 
-Linux or single-NVIDIA-GPU WSL2, Python 3.12 and bubblewrap. Windows runs through WSL2, not native Windows inference. Native electronic PDFs, including vector-only pages, are supported; scanned text and OCR are not. The backend is MinerU 4.0.12 with the pinned offline model bundle. Multi-GPU and MIG configurations are supported only on native Linux.
+Linux or WSL2, Python 3.12 and bubblewrap. Windows runs through WSL2, not native Windows inference. Native electronic PDFs, including vector-only pages, are supported; scanned text and OCR are not. GPU uses MinerU 4.0.12; CPU uses PyMuPDF4LLM/Layout 1.28.2. Results may differ by backend. WSL GPU execution supports one NVIDIA GPU; MIG and multi-GPU selection remain native-Linux-only.
 
 ## Check Results
 

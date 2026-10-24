@@ -4,7 +4,20 @@
 
 ## 环境安装
 
-需要 Linux、Python 3.12、NVIDIA 驱动和支持用户/网络命名空间的 bubblewrap（`bwrap`）。
+需要 Linux/WSL2、Python 3.12 和支持用户/网络命名空间的 bubblewrap（`bwrap`）。GPU 路径另外需要 NVIDIA CUDA 支持；Windows 使用 PowerShell 的 WSL2 入口。
+
+### 仅安装 CPU 环境
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements-cpu.txt
+python scripts/pdf2md.py convert --input ../manual.pdf
+```
+
+该环境同时包含协调器与锁定的 CPU 后端，不需要 CUDA、MinerU 或 GPU 模型目录。锁定版本的 Layout wheel 自带模型资源，转换时不下载权重。离线安装可在安装命令中增加 `--no-index --find-links /path/to/wheelhouse`。
+
+### GPU 环境
 
 可在一个 Python 环境中同时安装协调器依赖和 MinerU 后端；已有独立后端环境也可复用。协调器依赖见 `requirements-coordinator.txt`，后端参考清单见 `config/s1-mineru-requirements.lock.txt`。后端检查的版本包括 MinerU 4.0.12、torch 2.14.1、torchvision 0.29.1、pypdfium2 5.14.0；安装包需匹配目标 GPU 和驱动。
 
@@ -46,6 +59,12 @@ workspace/
 bubblewrap 选择顺序：`--bwrap`、配置 `bubblewrap_path`、`PDF2MD_BWRAP`、PATH。用户目录中的可执行文件仅以单文件只读挂载，不挂载整个父目录。WSL 自动使用 `/dev/dxg` 和 `/usr/lib/wsl/lib`；设备、权限或驱动库缺失时明确失败。Worker 保留 `--unshare-all` 和新挂载的 `/proc`。环境指纹绑定平台、驱动清单、GPU UUID、bubblewrap 字节与版本、WSL libcuda 字节；环境、代码、配置或输入改变时使用新结果目录。a1 缓存不能直接复用于 a2。
 
 ## 运行时覆盖
+
+`--compute auto` 为默认值，优先选择已准备好的 GPU，否则使用已准备好的 CPU 后端。`--compute cpu` 不使用 GPU 设备；`--compute cuda` 不会自动降级。配置损坏或绑定完整性校验失败会报错，不作为降级理由。运行中失败不切换后端；批次只选择一次后端。
+
+已有 GPU 环境保持不变。增加 CPU 支持时，另建环境安装 `requirements-cpu.txt`，再通过配置 `cpu_python`、环境变量 `PDF2MD_CPU_PYTHON` 或 `--cpu-python /path/to/env-cpu/bin/python` 指定。优先级为命令行 > 配置 > 环境变量 > 协调器 Python。CPU-only 协调器使用锁定的 PyMuPDF 1.28.2；已有 1.26.0 协调器也可驱动独立的 1.28.2 CPU Worker。GPU 协调器仍保持 1.26.0。
+
+`doctor` 分别报告 CPU/GPU 可用性与选择原因，不自动安装缺失后端。续跑和缓存复用固定原先后端及绑定，切换模式需换输出目录。原有重复 `--device /dev/...` 仍表示 GPU 节点授权，不用来选择 CPU。Windows 入口同步支持 `--cpu-python`、`--render-dir` 的路径转换及 `PDF2MD_CPU_PYTHON`。
 
 ```bash
 python scripts/pdf2md.py convert --input ../manual.pdf \

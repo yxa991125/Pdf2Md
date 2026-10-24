@@ -109,7 +109,8 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('doctor', result.stdout)
         self.assertIn('batch', result.stdout)
-        self.assertEqual(self.run_cli('--version').stdout.strip(), '0.1.0a2')
+        from pdf2md_p2 import __version__
+        self.assertEqual(self.run_cli('--version').stdout.strip(), __version__)
 
     def test_init_config_never_overwrites_existing_file(self):
         with tempfile.TemporaryDirectory() as name:
@@ -211,6 +212,9 @@ class BatchTests(unittest.TestCase):
         native = patch.object(configuration, 'is_wsl', return_value=False)
         native.start()
         self.addCleanup(native.stop)
+        runtime = patch('pdf2md_p2.cli.runtime', side_effect=lambda args: configuration.load(args.config))
+        runtime.start()
+        self.addCleanup(runtime.stop)
 
     def test_one_failed_pdf_does_not_stop_other_jobs_and_resume_preserves_logs(self):
         from pdf2md_p2 import batch

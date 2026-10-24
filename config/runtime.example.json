@@ -1,7 +1,9 @@
 {
   "schema_version": 1,
+  "compute": "auto",
   "coordinator_python": "../env-coordinator/bin/python",
   "parser_python": "../env-mineru/bin/python",
+  "cpu_python": "../env-cpu/bin/python",
   "model_path": "../models",
   "authorized_gpu": "0",
   "device_files": null,

@@ -19,7 +19,8 @@ def base(config, coordinator=False):
         if Path(name).exists():
             command += ['--ro-bind', name, name]
     paths = set()
-    for value in (config['coordinator_python'], config['parser_python']):
+    cpu = config.get('resolved_compute') == 'cpu'
+    for value in (config['coordinator_python'], config['cpu_python'] if cpu else config['parser_python']):
         python = Path(value)
         if not python.is_file():
             raise ValueError('Existing locked environment missing: ' + value)
@@ -36,11 +37,11 @@ def base(config, coordinator=False):
         if not Path(path).exists():
             raise ValueError('Authorized device missing: ' + path)
         command += ['--dev-bind', path, path]
-    for name, value in {'HOME': '/tmp', 'XDG_CACHE_HOME': '/tmp/cache', 'CUDA_VISIBLE_DEVICES': config['authorized_gpu'],
+    for name, value in {'HOME': '/tmp', 'XDG_CACHE_HOME': '/tmp/cache', 'CUDA_VISIBLE_DEVICES': '' if cpu else config['authorized_gpu'],
                         'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1', 'MINERU_MODEL_SOURCE': 'local',
                         'DO_NOT_TRACK': '1', 'NO_PROXY': '*', 'PYTHONDONTWRITEBYTECODE': '1',
                         'S1_NETWORK_ISOLATED': '1', 'PYTHONPATH': '/product/src',
-                        **driver_environment()}.items():
+                        **({} if cpu else driver_environment())}.items():
         command += ['--setenv', name, value]
     return command
 
@@ -50,9 +51,10 @@ def coordinator(config, pdf, output, remaining, native_cache=None):
     if native_cache is not None:
         command += ['--ro-bind', str(native_cache), '/native-cache']
         remaining = [*remaining, '--native-cache', '/native-cache']
+    if config.get('resolved_compute') != 'cpu':
+        command += ['--ro-bind', str(Path(config['model_path']) / 'MinerU-4_models_torch'),
+                    str(Path(config['model_path']) / 'MinerU-4_models_torch')]
     command += ['--ro-bind', str(PRODUCT), '/product', '--ro-bind', str(pdf), '/input.pdf',
-                '--ro-bind', str(Path(config['model_path']) / 'MinerU-4_models_torch'),
-                str(Path(config['model_path']) / 'MinerU-4_models_torch'),
                 '--bind', str(output), '/output', '--setenv', 'P2_ISOLATED', '1',
                 '--setenv', 'PDF2MD_EFFECTIVE_CONFIG', json.dumps(config, sort_keys=True), '--chdir', '/product',
                 config['coordinator_python'], '-m', 'pdf2md_p2', 'convert', '--input', '/input.pdf',
@@ -64,6 +66,12 @@ def worker(config, pdf, output, pages):
     if config['parse_mode'] != 'txt':
         raise ValueError('P2 native-only profile does not permit auto/ocr inference')
     command = base(config)
+    if config.get('resolved_compute') == 'cpu':
+        return [*command, '--ro-bind', str(PRODUCT / 'scripts/cpu_worker.py'), '/cpu_worker.py',
+                '--ro-bind', str(pdf), '/input.pdf', '--bind', str(output), '/output',
+                '--setenv', 'OMP_NUM_THREADS', '8', '--setenv', 'OPENBLAS_NUM_THREADS', '8',
+                '--chdir', '/output', config['cpu_python'], '-B', '/cpu_worker.py',
+                '--input', '/input.pdf', '--output', '/output', '--pages', ','.join(map(str, pages))]
     command += ['--ro-bind', str(PRODUCT / 'vendor/gpu_parser_worker.py'), '/worker.py',
                 '--ro-bind', str(PRODUCT / 'scripts/native_bootstrap.py'), '/bootstrap.py',
                 '--ro-bind', str(PRODUCT / 'scripts/native_policy.py'), '/native_policy.py',

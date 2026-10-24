@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.1.0a3 - 2026-10-24
+
+### CPU And GPU Selection
+
+- 新增 `--compute auto|cpu|cuda`，默认优先使用就绪的 GPU，否则使用已准备好的 CPU 后端。
+- CPU 使用 PyMuPDF4LLM / PyMuPDF / Layout 1.28.2，关闭 OCR；独立锁定依赖，不要求 CUDA 或 MinerU。
+- 支持 `cpu_python`、`--cpu-python` 和 `PDF2MD_CPU_PYTHON`，可与原 GPU 环境分开部署。
+- `doctor` 分别报告后端可用性、实际选择及原因。批次固定后端，运行失败不切换；续跑和缓存绑定后端、依赖与环境。
+- CPU Worker 保留网络、PID 和只读输入隔离，不挂载 GPU；GPU Worker、模型和质量检查算法保持不变。
+
+### Verifiable Source Mapping
+
+- 默认生成 `source_map.json`，绑定原 PDF、最终 Markdown 和图片哈希。
+- 为输出对象记录 ID、类型、最终字符区间、行号、物理页码、PDF points 区域及关联依据。
+- 新增 `trace`，支持按对象 ID 或 Markdown 行号返回 JSON；可指定原 PDF 和外部目录，按需导出来源区域截图。
+- 区分原生布局关联、独立原文匹配、歧义和未定位状态；关联成功不代表内容正确。
+- 映射完整性纳入 `verify`；旧结果继续按原规则校验，不补写映射。
+- 同步更新中英文上手文档、配置说明及 Skill，无需可视化页面。
+
+### Validation And Scope
+
+- 本机 CPU 和 GPU 环境各通过 143 项测试；PowerShell 5.1 的 12 项入口用例通过。
+- 完成合成 PDF 和公开 RT9013 手册的 CPU 转换、批量、恢复、来源查询及截图核验。
+- GPU 小样本 Markdown 和图片与 a2 逐字节一致。
+- 来源映射为对象级，不覆盖单元格或数学符号级语义；重复或不可靠来源保留未决状态。
+- CPU 与 GPU 的转换质量不等同；本轮未执行原生 Linux GPU 实机回归或另一台无 GPU 物理机验证。
+
 ## 0.1.0a2 - 2026-10-24
 
 ### WSL2 And Windows Entry

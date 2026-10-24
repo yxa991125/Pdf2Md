@@ -4,7 +4,7 @@ from pathlib import Path
 import shutil
 
 from .assets import materialize
-from .common import read, save, sha, verify, page_parts
+from .common import read, save, sha, verify, page_parts, within
 from .source import graphic_page
 
 PARSE_BINDINGS = ('scripts/native_bootstrap.py', 'scripts/native_policy.py', 'vendor/gpu_parser_worker.py',
@@ -12,6 +12,7 @@ PARSE_BINDINGS = ('scripts/native_bootstrap.py', 'scripts/native_policy.py', 've
                   'config/coordinator-requirements.lock.txt', 'src/pdf2md_p2/source.py')
 PARSE_BINDINGS += ('src/pdf2md_p2/configuration.py', 'src/pdf2md_p2/environment.py',
                    'src/pdf2md_p2/sandbox.py', 'src/pdf2md_p2/native.py', 'src/pdf2md_p2/platform_runtime.py')
+PARSE_BINDINGS += ('src/pdf2md_p2/backends.py', 'scripts/cpu_worker.py', 'config/cpu_bindings.json')
 
 
 def load(cache, pdf, output, config, binding, inspection):
@@ -42,6 +43,15 @@ def load(cache, pdf, output, config, binding, inspection):
             source, target = attempt / 'native_output' / name, copied / 'native_output' / name
             if target.exists() and sha(target) != sha(source):
                 raise ValueError('Partial cache materialization changed')
+            if not target.exists():
+                shutil.copyfile(source, target)
+        native_data = read(attempt / 'native_output/native.json')
+        locations = ['native_output/native.json'] + [row['middle_json'] for row in native_data['pages'] if 'middle_json' in row]
+        for relative in locations:
+            source, target = within(attempt, relative), within(copied, relative)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists() and sha(target) != sha(source):
+                raise ValueError('Cached source mapping data changed')
             if not target.exists():
                 shutil.copyfile(source, target)
         for relative, destination in (('markdown/document.md', 'markdown/document.md'),
