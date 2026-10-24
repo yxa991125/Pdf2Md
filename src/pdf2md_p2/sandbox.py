@@ -7,12 +7,11 @@ import shutil
 import sys
 
 from .common import PRODUCT
+from .platform_runtime import bwrap_path, driver_environment
 
 
 def base(config, coordinator=False):
-    bwrap = shutil.which('bwrap')
-    if not bwrap:
-        raise ValueError('Linux bubblewrap required; no unsandboxed fallback')
+    bwrap = bwrap_path(config)
     command = [bwrap]
     command += ['--unshare-user', '--unshare-net', '--unshare-ipc', '--unshare-uts', '--unshare-cgroup-try'] if coordinator else ['--unshare-all']
     command += ['--die-with-parent', '--new-session']
@@ -27,6 +26,8 @@ def base(config, coordinator=False):
         paths.update((python.parent.parent, python.resolve().parents[1]))
     for path in sorted(paths):
         command += ['--ro-bind', str(path), str(path)]
+    # A user-local tool must also exist in the coordinator's nested worker mount.
+    command += ['--ro-bind', bwrap, bwrap]
     command += ['--bind', '/proc', '/proc'] if coordinator else ['--proc', '/proc']
     if not coordinator and Path('/proc/driver/nvidia').exists():
         command += ['--ro-bind', '/proc/driver/nvidia', '/proc/driver/nvidia']
@@ -38,7 +39,8 @@ def base(config, coordinator=False):
     for name, value in {'HOME': '/tmp', 'XDG_CACHE_HOME': '/tmp/cache', 'CUDA_VISIBLE_DEVICES': config['authorized_gpu'],
                         'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1', 'MINERU_MODEL_SOURCE': 'local',
                         'DO_NOT_TRACK': '1', 'NO_PROXY': '*', 'PYTHONDONTWRITEBYTECODE': '1',
-                        'S1_NETWORK_ISOLATED': '1', 'PYTHONPATH': '/product/src'}.items():
+                        'S1_NETWORK_ISOLATED': '1', 'PYTHONPATH': '/product/src',
+                        **driver_environment()}.items():
         command += ['--setenv', name, value]
     return command
 

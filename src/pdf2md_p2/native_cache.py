@@ -11,7 +11,7 @@ PARSE_BINDINGS = ('scripts/native_bootstrap.py', 'scripts/native_policy.py', 've
                   'config/baseline_bindings.json', 'config/s1-mineru-requirements.lock.txt',
                   'config/coordinator-requirements.lock.txt', 'src/pdf2md_p2/source.py')
 PARSE_BINDINGS += ('src/pdf2md_p2/configuration.py', 'src/pdf2md_p2/environment.py',
-                   'src/pdf2md_p2/sandbox.py', 'src/pdf2md_p2/native.py')
+                   'src/pdf2md_p2/sandbox.py', 'src/pdf2md_p2/native.py', 'src/pdf2md_p2/platform_runtime.py')
 
 
 def load(cache, pdf, output, config, binding, inspection):

@@ -18,7 +18,7 @@ from .configuration import load as load_config, validate as validate_config, ini
 def runtime(args):
     return load_config(args.config, {key: getattr(args, option, None) for key, option in (
         ('parser_python', 'parser_python'), ('model_path', 'models'),
-        ('authorized_gpu', 'gpu'), ('device_files', 'device'))})
+        ('authorized_gpu', 'gpu'), ('device_files', 'device'), ('bubblewrap_path', 'bwrap'))})
 
 
 def default_output(source, batch=False):
@@ -206,6 +206,7 @@ def main():
     p.add_argument('--gpu', default='0', help='Visible GPU index (default: 0), full GPU-UUID or MIG-UUID')
     p.add_argument('--device', action='append', help='Override detected device nodes; repeat for each node; required for MIG')
     p.add_argument('--coordinator-python', default=sys.executable)
+    p.add_argument('--bwrap', help='Path to bubblewrap executable')
     p = sub.add_parser('doctor', help='Check pinned environments, model hashes, device permissions and network isolation; no inference')
     runtime_options(p)
     p.add_argument('--report', type=Path)
@@ -237,6 +238,8 @@ def main():
             if args.config.exists():
                 raise ValueError('Config exists; refusing overwrite')
             data = initial(args.parser_python, args.models, args.gpu, args.device, args.coordinator_python)
+            if args.bwrap:
+                data['bubblewrap_path'] = args.bwrap
             data = validate_config(data, args.config.resolve().parent)
             save(args.config, data)
             print(json.dumps({'config': str(args.config.resolve()), 'next': 'doctor --config ' + str(args.config)}))
@@ -278,6 +281,7 @@ def main():
 
 
 def runtime_options(parser):
+    parser.add_argument('--bwrap', help='Bubblewrap executable (default: PDF2MD_BWRAP or PATH)')
     parser.add_argument('--config', type=Path, help='Config JSON (default: discover runtime.local.json or user config)')
     parser.add_argument('--parser-python', help='Override MinerU Python (default: current interpreter)')
     parser.add_argument('--models', help='Override model root (default: ../models beside this distribution)')

@@ -5,10 +5,12 @@ import io
 from pathlib import Path
 import os
 import re
+import shutil
 import subprocess
 import sys
 
 from .common import PRODUCT, read
+from .platform_runtime import is_wsl
 
 POLICY = {
     'schema_version': 1, 'engine': 'MinerU', 'version': '4.0.12',
@@ -24,7 +26,7 @@ GPU = re.compile(r'(?:GPU|MIG)-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{
 
 
 def validate(data, base=None):
-    allowed = set(POLICY) | set(DEFAULTS) | set(PATHS) | {'authorized_gpu', 'device_files'}
+    allowed = set(POLICY) | set(DEFAULTS) | set(PATHS) | {'authorized_gpu', 'device_files', 'bubblewrap_path'}
     unknown = set(data) - allowed
     if unknown:
         raise ValueError('Unknown runtime settings: ' + ', '.join(sorted(unknown)))
@@ -41,10 +43,20 @@ def validate(data, base=None):
             path = Path(base or Path.cwd()) / path
         # Resolving a venv's bin/python symlink would silently select the base interpreter.
         result[key] = os.path.abspath(path)
+    if result.get('bubblewrap_path') is not None:
+        value = result['bubblewrap_path']
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError('bubblewrap_path must be an executable path')
+        path = Path(value).expanduser()
+        result['bubblewrap_path'] = os.path.abspath(path if path.is_absolute() else Path(base or Path.cwd()) / path)
     selector = result['authorized_gpu']
     if not isinstance(selector, str) or not (GPU.fullmatch(selector) or re.fullmatch(r'0|[1-9][0-9]*', selector)):
         raise ValueError('Use a nonnegative visible GPU index or a full GPU-UUID or MIG-UUID')
     devices = result.get('device_files')
+    if devices == ['/dev/dxg']:
+        if selector.startswith('MIG-'):
+            raise ValueError('WSL MIG is not supported')
+        return _validate_numbers(result)
     if devices is None:
         if selector.startswith('MIG-'):
             raise ValueError('MIG requires explicit device_files including capability nodes')
@@ -72,6 +84,10 @@ def _validate_numbers(result):
 
 
 def resolve_device(config):
+    if is_wsl():
+        return _resolve_wsl(config)
+    if config['device_files'] == ['/dev/dxg']:
+        raise ValueError('/dev/dxg requires WSL2')
     selector = config['authorized_gpu']
     if GPU.fullmatch(selector) and config['device_files'] is not None:
         return config
@@ -126,6 +142,35 @@ def resolve_device(config):
     return validate({**config, 'authorized_gpu': selected['uuid'], 'device_files': devices})
 
 
+def _resolve_wsl(config):
+    if config['authorized_gpu'].startswith('MIG-'):
+        raise ValueError('WSL MIG is not supported')
+    try:
+        result = subprocess.run(['nvidia-smi', '--query-gpu=index,uuid,name,driver_version',
+            '--format=csv,noheader,nounits'], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError('Cannot detect WSL GPU: ' + str(error)) from error
+    if result.returncode:
+        raise ValueError('WSL GPU detection failed: ' + (result.stderr or result.stdout).strip())
+    rows = [list(map(str.strip, row)) for row in csv.reader(io.StringIO(result.stdout)) if row]
+    if (len(rows) != 1 or len(rows[0]) != 4 or not rows[0][0].isdigit()
+            or not GPU.fullmatch(rows[0][1]) or not rows[0][1].startswith('GPU-')):
+        raise ValueError('WSL supports exactly one NVIDIA GPU; multi-GPU/MIG or invalid inventory is unsupported')
+    index, uuid, _, _ = rows[0]
+    listing = subprocess.run(['nvidia-smi', '-L'], capture_output=True, text=True, timeout=30)
+    if listing.returncode:
+        raise ValueError('Cannot inspect WSL MIG inventory: ' + (listing.stderr or listing.stdout).strip())
+    if 'MIG' in listing.stdout:
+        raise ValueError('WSL MIG is not supported')
+    if 'CUDA_VISIBLE_DEVICES' in os.environ and os.environ['CUDA_VISIBLE_DEVICES'].strip() not in (index, uuid):
+        raise ValueError('CUDA_VISIBLE_DEVICES does not authorize the single WSL GPU')
+    if config['authorized_gpu'] not in ('0', uuid):
+        raise ValueError('Configured WSL GPU is unavailable')
+    if config['device_files'] not in (None, ['/dev/dxg']):
+        raise ValueError('WSL requires only /dev/dxg; NVIDIA device nodes cannot be substituted')
+    return validate({**config, 'authorized_gpu': uuid, 'device_files': ['/dev/dxg']})
+
+
 def default_paths():
     paths = {'coordinator_python': sys.executable,
         'parser_python': os.environ.get('PDF2MD_PARSER_PYTHON', sys.executable),
@@ -148,12 +193,17 @@ def load(path=None, overrides=None):
     if not isinstance(data, dict):
         raise ValueError('Runtime config must be a JSON object')
     overrides = {key: value for key, value in (overrides or {}).items() if value is not None}
-    for key in PATHS:
+    if 'bubblewrap_path' not in overrides and not data.get('bubblewrap_path') and os.environ.get('PDF2MD_BWRAP'):
+        overrides['bubblewrap_path'] = os.environ['PDF2MD_BWRAP']
+    for key in (*PATHS, 'bubblewrap_path'):
         if key in overrides:
             overrides[key] = os.path.abspath(Path(overrides[key]).expanduser())
     if 'authorized_gpu' in overrides and 'device_files' not in overrides:
         overrides['device_files'] = None
-    return resolve_device(validate({**defaults, **data, **overrides}, path.parent if path else Path.cwd()))
+    config = validate({**defaults, **data, **overrides}, path.parent if path else Path.cwd())
+    if not config.get('bubblewrap_path') and shutil.which('bwrap'):
+        config['bubblewrap_path'] = os.path.abspath(shutil.which('bwrap'))
+    return resolve_device(config)
 
 
 def initial(parser_python=None, models=None, gpu='0', devices=None, coordinator_python=None):

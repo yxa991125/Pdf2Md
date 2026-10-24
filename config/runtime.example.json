@@ -5,6 +5,7 @@
   "model_path": "../models",
   "authorized_gpu": "0",
   "device_files": null,
+  "bubblewrap_path": null,
   "chunk_size": 50,
   "max_retries": 1,
   "worker_timeout_seconds": 14400

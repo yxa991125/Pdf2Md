@@ -2,7 +2,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Version: **0.1.0a1**. Convert native electronic PDFs to `manual.md + assets/` through a local, offline command-line workflow.
+[Changelog](CHANGELOG.md)
+
+Version: **0.1.0a2**. Convert native electronic PDFs to `manual.md + assets/` through a local, offline command-line workflow.
 
 ## Quick Start
 
@@ -10,6 +12,13 @@ Complete the one-time [environment setup](docs/CONFIGURATION.md#environment-setu
 
 ```bash
 python scripts/pdf2md.py convert --input ../manual.pdf
+```
+
+On Windows, use PowerShell with WSL2 after the one-time WSL environment setup. Windows Python is not needed:
+
+```powershell
+.\scripts\pdf2md.ps1 convert --input "D:\Documents\manual.pdf"
+.\scripts\pdf2md.ps1 batch --input-dir "D:\Documents\pdfs" --recursive
 ```
 
 Results are saved to `manual_pdf2md/` beside the PDF. Open `manual.md` and keep `assets/` alongside it when moving the result.
@@ -50,7 +59,7 @@ For custom model paths, separate backend environments, multiple GPUs or MIG, see
 
 ## Supported Inputs
 
-Linux, Python 3.12, NVIDIA GPU and bubblewrap. Native electronic PDFs, including vector-only pages, are supported; scanned text and OCR are not. The backend is MinerU 4.0.12 with the pinned offline model bundle.
+Linux or single-NVIDIA-GPU WSL2, Python 3.12 and bubblewrap. Windows runs through WSL2, not native Windows inference. Native electronic PDFs, including vector-only pages, are supported; scanned text and OCR are not. The backend is MinerU 4.0.12 with the pinned offline model bundle. Multi-GPU and MIG configurations are supported only on native Linux.
 
 ## Check Results
 

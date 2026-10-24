@@ -1,9 +1,11 @@
 ---
 name: pdf2md
-description: Test native electronic PDFs through a local offline MinerU-based Markdown converter with explicit per-deployment configuration. Not for scanned PDFs or OCR.
+description: Convert native electronic PDFs to Markdown and assets offline on Linux or single-GPU WSL2, including a Windows PowerShell launcher. Not for scanned PDFs or OCR.
 ---
 
 # Pdf2Md
+
+Windows uses WSL2, not Windows Python. After one-time setup, run `scripts/pdf2md.ps1 convert --input "D:\Documents\manual.pdf"` or `scripts/pdf2md.ps1 batch --input-dir "D:\Documents\pdfs" --recursive` from PowerShell. The default WSL distro is used; `--wsl-distro` and `--wsl-python` override it. See configuration docs for interpreter selection and paths. WSL supports one NVIDIA GPU through `/dev/dxg`, not MIG or multi-GPU. Both coordinator and worker use WSL driver libraries; the worker retains a fresh PID namespace and `/proc`. `--bwrap`, `PDF2MD_BWRAP` or `bubblewrap_path` selects a user-local bubblewrap without mounting its parent directory. Native Linux device/MIG configuration remains available below.
 
 Use this source distribution on Linux with Python 3.12, an existing compatible MinerU 4.0.12 environment and the offline model bundle. Read [README.md](README.md) or [中文说明](README.zh-CN.md) for setup. Routine use needs only `convert --input /path/manual.pdf`; offline execution, environment/preflight/integrity checks and output naming are automatic. The current Python is also the default backend; models default to `models/` beside this distribution. Config files are optional and discovered automatically. See [configuration](docs/CONFIGURATION.md) for overrides. GPU selection defaults to visible index 0, respecting `CUDA_VISIBLE_DEVICES`, with automatic device-node detection. MIG requires an explicit UUID and device nodes.
 
@@ -16,7 +18,7 @@ python scripts/pdf2md.py convert --config /absolute/runtime.json --input /absolu
 python scripts/pdf2md.py verify --output-dir /absolute/new-output
 ```
 
-Conversion runs the same environment checks as doctor before inference; doctor can also be run separately for diagnosis. It never installs dependencies, downloads models or selects substitute devices after a failed check. No CPU/Windows inference or unsandboxed fallback is provided. Linux namespaces deny network access; only the resolved device nodes are mounted. Runtime must not read Gold, scorer answers, review records or historical experiments. No S1/S2 or newly added OCR workflow is enabled; existing layout/math recognition remains.
+Conversion runs the same environment checks as doctor before inference; doctor can also be run separately for diagnosis. It never installs dependencies, downloads models or selects substitute devices after a failed check. No CPU/native-Windows inference or unsandboxed fallback is provided. Linux namespaces deny network access; only the resolved device nodes are mounted. Runtime must not read Gold, scorer answers, review records or historical experiments. No S1/S2 or newly added OCR workflow is enabled; existing layout/math recognition remains.
 
 For multiple local PDFs, `batch --config /absolute/runtime.json --input-dir /absolute/pdfs --output-dir /absolute/new-batch --offline` runs the same real entrypoint sequentially. Inspect `batch_summary.json` and per-attempt logs, including failures; do not treat it as a quality score. Use `--resume` only for identical inputs/code/config/environment and a confirmed stopped job; do not restart an observed live conversion. Changed test sets need new batch directories.
 

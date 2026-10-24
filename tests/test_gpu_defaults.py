@@ -17,6 +17,11 @@ INVENTORY = f'0, {FIRST}, 3, Disabled\n1, {SECOND}, 7, [N/A]\n'
 
 
 class GPUDefaultTests(unittest.TestCase):
+    def setUp(self):
+        native = patch.object(configuration, 'is_wsl', return_value=False)
+        native.start()
+        self.addCleanup(native.stop)
+
     def resolve(self, overrides=None, inventory=INVENTORY, env=None):
         value = configuration.validate({
             'coordinator_python': 'coordinator/bin/python', 'parser_python': 'parser/bin/python',

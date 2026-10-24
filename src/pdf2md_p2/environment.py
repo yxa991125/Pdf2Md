@@ -10,6 +10,7 @@ import stat
 import subprocess
 
 from .common import PRODUCT, read, sha
+from .platform_runtime import bwrap_path, driver_environment, is_wsl
 
 COORDINATOR = {'PyMuPDF': '1.26.0', 'Pillow': '12.3.0', 'markdown-it-py': '4.2.0', 'mdurl': '0.1.2'}
 PARSER = {'mineru': '4.0.12', 'torch': '2.14.1', 'torchvision': '0.29.1', 'pypdfium2': '5.14.0'}
@@ -22,7 +23,7 @@ def run(argv, timeout=60):
     result = subprocess.run(argv, capture_output=True, text=True, timeout=timeout,
         env={**os.environ, 'PYTHONDONTWRITEBYTECODE': '1', 'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1'})
     if result.returncode:
-        raise ValueError('Command failed: ' + repr(argv) + '\n' + result.stderr[-3000:])
+        raise ValueError('Command failed: ' + repr(argv) + '\n' + (result.stderr or result.stdout)[-3000:])
     return result.stdout
 
 
@@ -43,7 +44,14 @@ def inspect(config, namespaces=True):
             raise ValueError('Conversion requires Linux, NVIDIA CUDA and bubblewrap; no unsandboxed fallback')
         return platform.platform()
 
-    check('supported_platform', linux)
+    facts['platform'] = check('supported_platform', linux)
+    facts['runtime'] = {'wsl2': is_wsl(), 'kernel': platform.release()}
+    def isolation_tool():
+        path = bwrap_path(config)
+        return {'path': path, 'sha256': sha(path), 'version': run([path, '--version']).strip(),
+                'driver_environment': driver_environment(),
+                'wsl_libcuda_sha256': sha('/usr/lib/wsl/lib/libcuda.so.1') if is_wsl() else None}
+    facts['isolation_tool'] = check('isolation_tool', isolation_tool)
     for kind, key, required in (('coordinator', 'coordinator_python', COORDINATOR), ('parser', 'parser_python', PARSER)):
         def packages(key=key, required=required):
             data = json.loads(run([config[key], '-I', '-B', '-c', PROBE]))
@@ -83,8 +91,10 @@ def inspect(config, namespaces=True):
                 raise ValueError('Device access denied: ' + name)
         if config['authorized_gpu'] not in run(['nvidia-smi', '-L']):
             raise ValueError('Configured GPU UUID is not present; do not substitute another device')
-        return {'authorized_gpu': config['authorized_gpu'], 'device_files': config['device_files'], 'CUDA_compute_probed': False}
-    check('authorized_device_visibility', devices)
+        inventory = run(['nvidia-smi', '--query-gpu=index,uuid,name,driver_version', '--format=csv,noheader,nounits'])
+        return {'authorized_gpu': config['authorized_gpu'], 'device_files': config['device_files'],
+                'driver_inventory': inventory.strip(), 'CUDA_compute_probed': False}
+    facts['device'] = check('authorized_device_visibility', devices)
 
     def namespace():
         from .sandbox import base

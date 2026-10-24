@@ -2,7 +2,9 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-版本：**0.1.0a1**。通过命令行在本地离线将原生电子 PDF 转成 `manual.md + assets/`。
+[更新日志](CHANGELOG.md)
+
+版本：**0.1.0a2**。通过命令行在本地离线将原生电子 PDF 转成 `manual.md + assets/`。
 
 ## 快速开始
 
@@ -10,6 +12,13 @@
 
 ```bash
 python scripts/pdf2md.py convert --input ../manual.pdf
+```
+
+Windows 完成一次 WSL2 环境准备后，可直接在 PowerShell 中运行，无需 Windows Python：
+
+```powershell
+.\scripts\pdf2md.ps1 convert --input "D:\Documents\manual.pdf"
+.\scripts\pdf2md.ps1 batch --input-dir "D:\Documents\pdfs" --recursive
 ```
 
 结果保存在 PDF 同目录的 `manual_pdf2md/` 中，打开其中的 `manual.md` 即可。移动结果时一起保留 `assets/`。
@@ -50,7 +59,7 @@ python scripts/pdf2md.py convert --help
 
 ## 适用范围
 
-Linux、Python 3.12、NVIDIA GPU 和 bubblewrap。支持原生电子 PDF，包含其中的纯矢量图页；不支持扫描文字或 OCR。后端为 MinerU 4.0.12，使用锁定的离线模型。
+原生 Linux 或单 NVIDIA GPU 的 WSL2、Python 3.12 和 bubblewrap。Windows 通过 WSL2 执行，不使用原生 Windows 推理。支持原生电子 PDF，包含其中的纯矢量图页；不支持扫描文字或 OCR。后端为 MinerU 4.0.12，使用锁定的离线模型。多 GPU、MIG 仅支持原生 Linux。
 
 ## 结果检查
 

@@ -147,8 +147,8 @@ class ProductTests(unittest.TestCase):
     def test_escaped_path_and_remote_asset_rejected(self):
         for url in ('../outside.png', '%2e%2e/outside.png', 'https://example.test/a.png', 'file:///a.png', r'assets\a.png'):
             with self.subTest(url=url):
-                with self.assertRaises(ValueError):
-                    assets.local_path(Path.cwd(), url)
+                with tempfile.TemporaryDirectory() as boundary, self.assertRaises(ValueError):
+                    assets.local_path(Path(boundary), url)
 
     def test_worker_parent_asset_relocated_to_product(self):
         with tempfile.TemporaryDirectory() as temporary:

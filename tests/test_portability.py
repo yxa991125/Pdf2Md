@@ -23,6 +23,11 @@ def config():
 
 
 class ConfigurationTests(unittest.TestCase):
+    def setUp(self):
+        native = patch.object(configuration, 'is_wsl', return_value=False)
+        native.start()
+        self.addCleanup(native.stop)
+
     @unittest.skipUnless(sys.platform == 'linux', 'Linux virtualenv executable layout')
     def test_virtualenv_interpreter_symlink_is_not_resolved_to_base_python(self):
         with tempfile.TemporaryDirectory() as name:
@@ -104,7 +109,7 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('doctor', result.stdout)
         self.assertIn('batch', result.stdout)
-        self.assertEqual(self.run_cli('--version').stdout.strip(), '0.1.0a1')
+        self.assertEqual(self.run_cli('--version').stdout.strip(), '0.1.0a2')
 
     def test_init_config_never_overwrites_existing_file(self):
         with tempfile.TemporaryDirectory() as name:
@@ -139,11 +144,14 @@ class CommandTests(unittest.TestCase):
 
 
 class DoctorTests(unittest.TestCase):
-    def inspect(self, wrong_version=False, platform_name='Linux', wrong_prefix=False):
+    def inspect(self, wrong_version=False, platform_name='Linux', wrong_prefix=False,
+                tool_version='bubblewrap 0.9.0', driver='596.36'):
         value = configuration.validate(config())
         def command(argv, **kwargs):
+            if argv[0] == '/usr/bin/bwrap':
+                return tool_version
             if argv[0] == 'nvidia-smi':
-                return 'Device (' + UUID + ')'
+                return 'Device (' + UUID + ') ' + driver
             if argv[0] == 'namespace':
                 return json.dumps({'unexpected_interfaces': []})
             deps = environment.COORDINATOR if argv[0] == value['coordinator_python'] else environment.PARSER
@@ -154,6 +162,9 @@ class DoctorTests(unittest.TestCase):
                 'prefix': '/wrong-wide-prefix' if wrong_prefix else str(Path(argv[0]).parent.parent)})
         binding = {'worker_sha256': sha(PRODUCT / 'vendor/gpu_parser_worker.py'), 'models': {}}
         with patch.object(environment, 'run', side_effect=command), \
+                patch.object(environment, 'bwrap_path', return_value='/usr/bin/bwrap'), \
+                patch.object(environment, 'driver_environment', return_value={}), \
+                patch.object(environment, 'sha', return_value=binding['worker_sha256']), \
                 patch.object(environment, 'read', return_value=binding), \
                 patch.object(environment.platform, 'system', return_value=platform_name), \
                 patch.object(environment.os, 'access', return_value=True), \
@@ -179,6 +190,12 @@ class DoctorTests(unittest.TestCase):
     def test_fingerprint_is_stable_without_timestamps(self):
         self.assertEqual(self.inspect()['environment_fingerprint'], self.inspect()['environment_fingerprint'])
 
+    def test_driver_and_isolation_tool_changes_bind_fingerprint_without_config_change(self):
+        before = self.inspect()
+        for changed in (self.inspect(driver='600.0'), self.inspect(tool_version='bubblewrap 0.10')):
+            self.assertEqual(before['config'], changed['config'])
+            self.assertNotEqual(before['environment_fingerprint'], changed['environment_fingerprint'])
+
     def test_native_cache_environment_change_is_not_accepted(self):
         from pdf2md_p2.native_cache import load
         with tempfile.TemporaryDirectory() as name:
@@ -190,6 +207,11 @@ class DoctorTests(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == 'linux', 'Real batch lock is Linux-only')
 class BatchTests(unittest.TestCase):
+    def setUp(self):
+        native = patch.object(configuration, 'is_wsl', return_value=False)
+        native.start()
+        self.addCleanup(native.stop)
+
     def test_one_failed_pdf_does_not_stop_other_jobs_and_resume_preserves_logs(self):
         from pdf2md_p2 import batch
         with tempfile.TemporaryDirectory() as name:
