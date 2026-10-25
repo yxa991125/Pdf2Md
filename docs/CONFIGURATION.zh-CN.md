@@ -47,14 +47,14 @@ workspace/
 在 WSL2 内一次性准备 Python 3.12、锁定依赖、模型和 bubblewrap。使用支持 WSL CUDA 的 Windows NVIDIA 驱动，不在 WSL 内安装 Linux 显示驱动。本轮 WSL 仅支持单 NVIDIA GPU，多 GPU 和 MIG 会被拒绝；原生 Linux 保留既有设备及 MIG 配置。
 
 ```powershell
-.\scripts\pdf2md.ps1 convert --input "D:\Documents\manual.pdf"
-.\scripts\pdf2md.ps1 verify --output-dir "D:\Documents\manual_pdf2md"
-.\scripts\pdf2md.ps1 doctor --wsl-distro Ubuntu-24.04 --wsl-python /path/to/venv/bin/python
+.\scripts\pdf2md.cmd convert --input "D:\Documents\manual.pdf"
+.\scripts\pdf2md.cmd verify --output-dir "D:\Documents\manual_pdf2md"
+.\scripts\pdf2md.cmd doctor --wsl-distro Ubuntu-24.04 --wsl-python /path/to/venv/bin/python
 ```
 
 默认使用系统默认 WSL 发行版，`--wsl-distro` 可覆盖。Python 选择顺序：`--wsl-python`、`PDF2MD_WSL_PYTHON`、所选或自动发现配置中的 `coordinator_python`、项目 `.venv/bin/python`、`python3`。项目 `.venv` 同时安装协调器和后端依赖、旁边放置 `models/` 时，无需配置文件。自定义路径也可使用选定的 WSL Python 通过 `init-config` 保存一次。入口不调用 Windows Python。
 
-输入、输出、配置、模型、报告、缓存可使用盘符路径、Windows 相对路径或 WSL 绝对路径。命令行相对路径基于 PowerShell 当前目录，支持中文、空格和未创建的输出目录。首版拒绝 UNC 和 `D:manual.pdf` 这样的盘符相对路径，后者请写成 `D:\manual.pdf`。支持 `--key value` 和 `--key=value`；保留退出码和日志，转换成功后显示 Windows 可打开的结果路径。若本机策略阻止脚本运行，可单次执行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\pdf2md.ps1 --help`，无需更改全局策略。
+输入、输出、配置、模型、报告、缓存可使用盘符路径、Windows 相对路径或 WSL 绝对路径。命令行相对路径基于 PowerShell 当前目录，支持中文、空格和未创建的输出目录。首版拒绝 UNC 和 `D:manual.pdf` 这样的盘符相对路径，后者请写成 `D:\manual.pdf`。支持 `--key value` 和 `--key=value`；保留退出码和日志，转换成功后显示 Windows 可打开的结果路径。即使 PowerShell 的有效策略为 `Restricted`，也使用 `pdf2md.cmd` 启动。它只为自己的 PowerShell 子进程设置执行策略参数，不调用 `Set-ExecutionPolicy`，不修改注册表中的用户或系统策略。`.ps1` 保留兼容，但不再作为用户和 Agent 的默认入口。组织强制的组策略不会被覆盖；遇到这类限制应报告管理员，不修改安全设置。
 
 bubblewrap 选择顺序：`--bwrap`、配置 `bubblewrap_path`、`PDF2MD_BWRAP`、PATH。用户目录中的可执行文件仅以单文件只读挂载，不挂载整个父目录。WSL 自动使用 `/dev/dxg` 和 `/usr/lib/wsl/lib`；设备、权限或驱动库缺失时明确失败。Worker 保留 `--unshare-all` 和新挂载的 `/proc`。环境指纹绑定平台、驱动清单、GPU UUID、bubblewrap 字节与版本、WSL libcuda 字节；环境、代码、配置或输入改变时使用新结果目录。a1 缓存不能直接复用于 a2。
 

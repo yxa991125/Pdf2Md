@@ -123,6 +123,15 @@ class SandboxTests(unittest.TestCase):
 
 
 class WindowsBridgeTests(unittest.TestCase):
+    def test_missing_selected_python_explains_runtime_setup(self):
+        with patch.object(sys, 'argv', ['wsl_entry.py', 'D:\\workspace', '-', 'e30=', '--help']), \
+                patch.object(bridge, 'linux_path', return_value='/mnt/d/workspace'), \
+                patch.object(bridge.os, 'chdir'), \
+                patch.object(bridge, 'select_python', return_value='/missing/python'), \
+                patch.object(bridge.subprocess, 'run', side_effect=FileNotFoundError('missing')):
+            with self.assertRaisesRegex(ValueError, 'WSL Python not found.*docs/CONFIGURATION.md'):
+                bridge.main()
+
     def test_linux_paths_passthrough_and_unc_refused(self):
         self.assertEqual(bridge.linux_path('/home/user/a b.pdf', '/tmp'), '/home/user/a b.pdf')
         for path in ('\\\\server\\share\\a.pdf', '//server/share', 'D:relative.pdf'):

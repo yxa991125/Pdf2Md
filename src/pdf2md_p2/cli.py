@@ -315,7 +315,7 @@ def main():
             if (output / 'source_map.json').is_file():
                 from .source_map import validate
                 mapping = validate(output)['states']
-            elif read(output / 'run_manifest.json')['configuration'].get('version') == '0.1.0a3':
+            elif read(output / 'run_manifest.json')['configuration'].get('version') in ('0.1.0a3', '0.1.0a4'):
                 raise ValueError('New-version result is missing source_map.json')
             print(json.dumps({'integrity_passed': True, 'pages': quality['expected_pages'],
                 'image_references': len(assets), 'source_mapping_states': mapping, 'semantic_fidelity_certified': False}))

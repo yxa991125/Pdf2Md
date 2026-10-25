@@ -89,7 +89,11 @@ def main():
     product = Path(__file__).resolve().parents[1]
     args = translate(args, cwd)
     python = select_python(interpreter_path(explicit, cwd) if explicit != '-' else None, args, product)
-    status = subprocess.run([python, '-B', str(product / 'scripts/pdf2md.py'), *args]).returncode
+    try:
+        status = subprocess.run([python, '-B', str(product / 'scripts/pdf2md.py'), *args]).returncode
+    except FileNotFoundError as error:
+        raise ValueError(f'WSL Python not found: {python}. Prepare Python 3.12 and the runtime dependencies; '
+                         'select it with --wsl-python or runtime.local.json. See docs/CONFIGURATION.md.') from error
     if status == 0 and args and args[0] in ('convert', 'batch'):
         sys.path.insert(0, str(product / 'src'))
         from pdf2md_p2.cli import default_output

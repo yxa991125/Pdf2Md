@@ -18,6 +18,13 @@ from pdf2md_p2.common import digest, inventory, read, save, sha
 
 
 class BackendSelectionTests(unittest.TestCase):
+    def test_no_backend_explains_setup_without_installing_anything(self):
+        error = backends.NoBackendAvailable({'cpu': {'ready_for_conversion': False}})
+        self.assertIn('No prepared backend', str(error))
+        self.assertIn('docs/CONFIGURATION.md', str(error))
+        self.assertIn('--config', str(error))
+        self.assertIn('--wsl-python', str(error))
+
     def config(self, **values):
         return configuration.validate(configuration.initial(sys.executable, 'models') | values)
 

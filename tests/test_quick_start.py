@@ -99,6 +99,16 @@ class DefaultConfigurationTests(unittest.TestCase):
 
 
 class QuickStartCommandTests(unittest.TestCase):
+    def test_current_and_a3_results_require_mapping_but_older_results_remain_verifiable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            (output / 'manual.md').write_text('body\n', encoding='utf-8')
+            save(output / 'quality_report.json', {'completed_pages': [1], 'expected_pages': 1})
+            for version, expected in (('0.1.0a2', 0), ('0.1.0a3', 1), ('0.1.0a4', 1)):
+                with self.subTest(version=version), patch.object(cli, 'verify'):
+                    save(output / 'run_manifest.json', {'configuration': {'version': version}})
+                    self.assertEqual(self.call('verify', '--output-dir', output), expected)
+
     def call(self, *args):
         with patch.object(sys, 'argv', ['pdf2md.py', *map(str, args)]), \
                 contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):

@@ -9,7 +9,10 @@ from .configuration import CPU_POLICY, POLICY, resolve_device, validate
 class NoBackendAvailable(ValueError):
     def __init__(self, reports):
         self.reports = reports
-        super().__init__('No prepared backend is available: ' + json.dumps(reports))
+        super().__init__('No prepared backend is available. Check the one-time setup in '
+                         'docs/CONFIGURATION.md (Chinese: docs/CONFIGURATION.zh-CN.md), or select an '
+                         'existing deployment with --config /path/runtime.json or --wsl-python /path/bin/python. '
+                         'Backend checks: ' + json.dumps(reports))
 
 
 def candidate(config, device):

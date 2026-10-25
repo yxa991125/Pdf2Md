@@ -1,3 +1,4 @@
 * text=auto eol=lf
+*.cmd text eol=crlf
 # Preserve the worker bytes checked by baseline_bindings.json.
 vendor/gpu_parser_worker.py -text

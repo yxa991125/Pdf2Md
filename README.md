@@ -4,7 +4,7 @@
 
 [Changelog](CHANGELOG.md)
 
-Version: **0.1.0a3**. Convert native electronic PDFs to `manual.md + assets/`, with source locations for verification. Supports GPU and CPU execution.
+Version: **0.1.0a4**. Convert native electronic PDFs to `manual.md + assets/`, with source locations for verification. Supports GPU and CPU execution.
 
 ## Quick Start
 
@@ -14,11 +14,11 @@ Complete the one-time [environment setup](docs/CONFIGURATION.md#environment-setu
 python scripts/pdf2md.py convert --input ../manual.pdf
 ```
 
-On Windows, use PowerShell with WSL2 after the one-time WSL environment setup. Windows Python is not needed:
+On Windows, use PowerShell with WSL2 after the one-time WSL environment setup. Windows Python is not needed. The CMD launcher works with the usual Restricted PowerShell execution policy, without changing user or system policy:
 
 ```powershell
-.\scripts\pdf2md.ps1 convert --input "D:\Documents\manual.pdf"
-.\scripts\pdf2md.ps1 batch --input-dir "D:\Documents\pdfs" --recursive
+.\scripts\pdf2md.cmd convert --input "D:\Documents\manual.pdf"
+.\scripts\pdf2md.cmd batch --input-dir "D:\Documents\pdfs" --recursive
 ```
 
 Results are saved to `manual_pdf2md/` beside the PDF. Open `manual.md` and keep `assets/` alongside it when moving the result.

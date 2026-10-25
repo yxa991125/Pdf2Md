@@ -4,7 +4,7 @@
 
 [更新日志](CHANGELOG.md)
 
-版本：**0.1.0a3**。在本地离线将原生电子 PDF 转成 `manual.md + assets/`，并提供便于核验的来源定位。支持 GPU 和 CPU 运行。
+版本：**0.1.0a4**。在本地离线将原生电子 PDF 转成 `manual.md + assets/`，并提供便于核验的来源定位。支持 GPU 和 CPU 运行。
 
 ## 快速开始
 
@@ -14,11 +14,11 @@
 python scripts/pdf2md.py convert --input ../manual.pdf
 ```
 
-Windows 完成一次 WSL2 环境准备后，可直接在 PowerShell 中运行，无需 Windows Python：
+Windows 完成一次 WSL2 环境准备后，可直接在 PowerShell 中运行，无需 Windows Python。CMD 入口可在常见的 PowerShell `Restricted` 策略下启动，不修改用户或系统执行策略：
 
 ```powershell
-.\scripts\pdf2md.ps1 convert --input "D:\Documents\manual.pdf"
-.\scripts\pdf2md.ps1 batch --input-dir "D:\Documents\pdfs" --recursive
+.\scripts\pdf2md.cmd convert --input "D:\Documents\manual.pdf"
+.\scripts\pdf2md.cmd batch --input-dir "D:\Documents\pdfs" --recursive
 ```
 
 结果保存在 PDF 同目录的 `manual_pdf2md/` 中，打开其中的 `manual.md` 即可。移动结果时一起保留 `assets/`。

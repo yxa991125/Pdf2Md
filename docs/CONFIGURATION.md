@@ -47,14 +47,14 @@ Conversion never downloads dependencies or models. After setup, routine conversi
 Prepare Python 3.12, the pinned dependencies, models and bubblewrap inside WSL2 once. Use the Windows NVIDIA driver with WSL CUDA support; do not install a Linux display driver in WSL. This profile supports a single NVIDIA GPU; WSL multi-GPU and MIG are rejected. Native Linux keeps its existing device/MIG settings.
 
 ```powershell
-.\scripts\pdf2md.ps1 convert --input "D:\Documents\manual.pdf"
-.\scripts\pdf2md.ps1 verify --output-dir "D:\Documents\manual_pdf2md"
-.\scripts\pdf2md.ps1 doctor --wsl-distro Ubuntu-24.04 --wsl-python /path/to/venv/bin/python
+.\scripts\pdf2md.cmd convert --input "D:\Documents\manual.pdf"
+.\scripts\pdf2md.cmd verify --output-dir "D:\Documents\manual_pdf2md"
+.\scripts\pdf2md.cmd doctor --wsl-distro Ubuntu-24.04 --wsl-python /path/to/venv/bin/python
 ```
 
 The launcher uses the default WSL distro unless `--wsl-distro` is supplied. Python selection: `--wsl-python`, `PDF2MD_WSL_PYTHON`, the selected/discovered config's `coordinator_python`, the project's `.venv/bin/python`, then `python3`. A project `.venv` with both coordinator and backend dependencies, and sibling `models/`, needs no config file. Alternatively, save custom paths once with `init-config` using the chosen WSL Python. Windows Python is never invoked.
 
-Drive paths, Windows relative paths and WSL absolute paths are accepted for input, output, config, models, reports and cache. Relative CLI paths use the PowerShell current directory. Spaces, Unicode and new output directories are supported. UNC paths and drive-relative paths such as `D:manual.pdf` are rejected; use `D:\manual.pdf` instead. Options accept both `--key value` and `--key=value`. Exit codes and native logs are preserved; successful conversions display a Windows-openable output path. If local script execution is blocked by policy, invoke `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\pdf2md.ps1 --help` for this invocation only.
+Drive paths, Windows relative paths and WSL absolute paths are accepted for input, output, config, models, reports and cache. Relative CLI paths use the PowerShell current directory. Spaces, Unicode and new output directories are supported. UNC paths and drive-relative paths such as `D:manual.pdf` are rejected; use `D:\manual.pdf` instead. Options accept both `--key value` and `--key=value`. Exit codes and native logs are preserved; successful conversions display a Windows-openable output path. Use `pdf2md.cmd` even when PowerShell's effective policy is Restricted. It starts the existing PowerShell bridge with a process-only execution-policy argument; it never calls `Set-ExecutionPolicy` or changes registry policy. The `.ps1` remains available for compatibility but is not the default user/Agent entry. Organization-enforced Group Policy is not overridden; report the restriction to the administrator rather than changing security settings.
 
 Bubblewrap lookup: `--bwrap`, config `bubblewrap_path`, `PDF2MD_BWRAP`, then PATH. A user-local executable is mounted read-only into the nested sandbox, not its parent directory. WSL uses `/dev/dxg` and `/usr/lib/wsl/lib`; missing devices, permissions or driver libraries fail explicitly. The worker keeps `--unshare-all` and fresh `/proc`. Reports bind platform, driver inventory, GPU UUID, bubblewrap bytes/version and WSL libcuda bytes into the environment fingerprint. Changed environment/code/config/input requires a new run; a1 caches are not interchangeable with a2.
 

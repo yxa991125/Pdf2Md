@@ -5,7 +5,7 @@ description: Convert native electronic PDFs to Markdown and assets offline on Li
 
 # Pdf2Md
 
-Read [README.md](README.md) or [中文说明](README.zh-CN.md) for one-time setup. Routine conversion needs only an input. Use Python 3.12 and bubblewrap on Linux/WSL2; Windows uses `scripts/pdf2md.ps1`, not Windows Python. CPU-only installations use `requirements-cpu.txt` without CUDA/MinerU. GPU keeps the pinned MinerU profile. Configuration and interpreter overrides are in [configuration](docs/CONFIGURATION.md).
+Read [README.md](README.md) or [中文说明](README.zh-CN.md) for one-time setup. Routine conversion needs only an input. Use Python 3.12 and bubblewrap on Linux/WSL2; Windows uses `scripts/pdf2md.cmd`, not Windows Python. CPU-only installations use `requirements-cpu.txt` without CUDA/MinerU. GPU keeps the pinned MinerU profile. Configuration and interpreter overrides are in [configuration](docs/CONFIGURATION.md).
 
 ```bash
 python scripts/pdf2md.py convert --input /path/manual.pdf
@@ -13,7 +13,9 @@ python scripts/pdf2md.py batch --input-dir /path/pdfs --recursive
 python scripts/pdf2md.py verify --output-dir /path/manual_pdf2md
 ```
 
-On Windows, replace `python scripts/pdf2md.py` with `.\scripts\pdf2md.ps1`; Windows paths, spaces and Unicode are accepted. `--wsl-distro` and `--wsl-python` select a deployment explicitly.
+On Windows, always use `.\scripts\pdf2md.cmd` instead of `python scripts/pdf2md.py` or direct `.ps1` execution. The CMD launcher handles the normal Restricted PowerShell policy for its own child process only; do not run `Set-ExecutionPolicy` or change global settings. Windows paths, spaces and Unicode are accepted. `--wsl-distro` and `--wsl-python` select a deployment explicitly.
+
+A clone contains source code, not the runtime or model installation. Reuse a prepared deployment or follow the one-time setup instructions; do not claim readiness merely because the repository was cloned. Conversion already runs environment and input checks. If setup is missing or an organization-enforced policy blocks launch, report the actual error and the documented setup requirement; do not install dependencies, download models or weaken isolation without authorization.
 
 ## Backend Selection
 
