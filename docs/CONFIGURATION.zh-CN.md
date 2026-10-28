@@ -4,6 +4,40 @@
 
 ## 环境安装
 
+### 用户级初始化
+
+Linux 运行 `python3 scripts/pdf2md.py setup`，Windows 运行 `.\scripts\pdf2md.cmd setup`。终端展示方案并询问一次；Agent 先运行 `setup --check --json`，获得授权后改用 `setup --yes`。非交互环境没有 `--yes` 时不会安装；`--check` 即使同时带有 `--yes` 也只读检查。
+
+| 状态 | 退出码 | 含义 |
+| --- | --- | --- |
+| READY | 0 | 选定环境可用 |
+| NEEDS_APPROVAL | 3 | 需要授权安装 |
+| NEEDS_ACTION | 4 | 系统前提或手工配置需要处理 |
+| FAILED | 1 | 安装或验证失败，保留日志 |
+| 参数错误 | 2 | 命令参数无效 |
+
+JSON 写 stdout，进度与安装日志写 stderr。完整参数见 `setup --help`。不会覆盖已有手工配置；配置优先级保持为显式参数、`PDF2MD_CONFIG`、当前目录/项目的 `runtime.local.json`、用户配置。损坏配置明确报错，不跳过它寻找另一个环境。
+
+默认目录遵循 XDG：数据为 `~/.local/share/pdf2md`，日志与凭据为 `~/.local/state/pdf2md`，配置为 `~/.config/pdf2md/runtime.json`。WSL 环境默认建在 Linux 文件系统，而非 Windows 挂载盘。完成后无需激活环境。失败后重复原 setup 命令即可继续准备同一受管理环境；并发安装会被拒绝，不改动已有转换结果。
+
+`auto` 有可见 GPU 时准备 GPU，否则准备 CPU；GPU 安装失败不切换 CPU。GPU 的协调器与解析器分开，CPU 使用独立兼容环境。原冻结清单中的 `pip==25.0.1` 属于安装器，不参与运行依赖安装；其余运行依赖锁定值（含 setuptools）保持不变。在线依赖来源为 PyPI；模型仅从 `config/model_download.json` 固定的 Hugging Face revision 获取，并逐文件核对原 SHA256，全部有效后生成完成标记。Python 包大小在 pip 解析前未知，GPU 依赖通常需要数 GiB；检查结果给出精确模型字节数。转换本身不访问上述服务。
+
+离线导入示例，资源路径由用户明确提供：
+
+```bash
+python3 scripts/pdf2md.py setup --check --json --compute cuda --offline \
+  --wheelhouse /media/wheels --wheelhouse /media/more-wheels --models /media/models
+# 授权后将 --check 换成 --yes，其余选项保持一致。
+```
+
+Wheel 介质须覆盖 Python 3.12/Linux 和当前架构下的锁定依赖。GPU 模型目录包含 `MinerU-4_models_torch/`，也可直接指向该目录；校验后复制到用户级受管理目录，不修改源介质。CPU 无需 GPU 模型。可指定 `--bwrap /path/to/bwrap`，或在 wheelhouse 中提供发行版的对应 `.deb`。Debian/Ubuntu 缺少 bwrap 时，可从官方受信任 APT 元数据获取包并校验 SHA256，在用户目录解包，不执行 sudo、系统安装或包维护脚本。其他发行版须自行准备 bwrap。
+
+系统前提为 Linux/WSL2、带 venv/ensurepip 的 Python 3.12、所需动态库及可用的用户/网络命名空间。不会自动下载 Python 或修改安全策略。Ubuntu 24.04 可由管理员提供 `python3.12-venv`；Debian 13 应另备 Python 3.12，不使用系统 Python 3.13；不在 PATH 时用该解释器启动 setup。Windows 先确保 WSL2 发行版可启动（`wsl.exe --list --verbose`），可用 `--wsl-distro NAME` 选择。GPU 驱动和设备权限需要预先就绪。CMD 入口支持普通 Restricted 策略，组织强制策略需管理员处理。
+
+发布配置前会完成依赖、隔离检查，两页合成 PDF 真实转换、正式校验及来源查询；GPU 额外检查真实 CUDA 运算证据。失败安装只保留日志，不成为默认环境；实现指纹变化后重新验证受管理环境，不通过改名发布虚拟环境。
+
+### 手工部署
+
 需要 Linux/WSL2、Python 3.12 和支持用户/网络命名空间的 bubblewrap（`bwrap`）。GPU 路径另外需要 NVIDIA CUDA 支持；Windows 使用 PowerShell 的 WSL2 入口。
 
 ### 仅安装 CPU 环境
@@ -12,7 +46,7 @@
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements-cpu.txt
-python scripts/pdf2md.py convert --input ../manual.pdf
+python3 scripts/pdf2md.py convert --input ../manual.pdf
 ```
 
 该环境同时包含协调器与锁定的 CPU 后端，不需要 CUDA、MinerU 或 GPU 模型目录。锁定版本的 Layout wheel 自带模型资源，转换时不下载权重。离线安装可在安装命令中增加 `--no-index --find-links /path/to/wheelhouse`。
@@ -67,7 +101,7 @@ bubblewrap 选择顺序：`--bwrap`、配置 `bubblewrap_path`、`PDF2MD_BWRAP`�
 `doctor` 分别报告 CPU/GPU 可用性与选择原因，不自动安装缺失后端。续跑和缓存复用固定原先后端及绑定，切换模式需换输出目录。原有重复 `--device /dev/...` 仍表示 GPU 节点授权，不用来选择 CPU。Windows 入口同步支持 `--cpu-python`、`--render-dir` 的路径转换及 `PDF2MD_CPU_PYTHON`。
 
 ```bash
-python scripts/pdf2md.py convert --input ../manual.pdf \
+python3 scripts/pdf2md.py convert --input ../manual.pdf \
   --models /path/to/models --parser-python /path/to/env-mineru/bin/python
 ```
 
@@ -78,7 +112,7 @@ python scripts/pdf2md.py convert --input ../manual.pdf \
 需要反复使用非默认路径时，可生成配置文件：
 
 ```bash
-python scripts/pdf2md.py init-config \
+python3 scripts/pdf2md.py init-config \
   --parser-python /path/to/env-mineru/bin/python --models /path/to/models
 ```
 
@@ -92,16 +126,16 @@ python scripts/pdf2md.py init-config \
 
 ```bash
 # 只检查环境，不运行推理
-python scripts/pdf2md.py doctor
+python3 scripts/pdf2md.py doctor
 
 # 只检查输入 PDF
-python scripts/pdf2md.py preflight --input ../manual.pdf
+python3 scripts/pdf2md.py preflight --input ../manual.pdf
 
 # 重新检查已有结果的封存、页序和图片
-python scripts/pdf2md.py verify --output-dir ../manual_pdf2md
+python3 scripts/pdf2md.py verify --output-dir ../manual_pdf2md
 
 # 批量中断恢复
-python scripts/pdf2md.py batch --input-dir ../pdfs --recursive --resume
+python3 scripts/pdf2md.py batch --input-dir ../pdfs --recursive --resume
 ```
 
 `convert --native-cache /path/to/previous-result` 可复用本工具生成且兼容的封存分块，跳过对应推理。续跑和缓存复用均校验输入、实现、配置及环境绑定；输入集合发生变化时使用新的输出目录。

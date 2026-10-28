@@ -221,11 +221,16 @@ def convert(args):
 
 
 def main():
+    if sys.argv[1:2] == ['setup']:
+        from .setup import main as setup
+        return setup(sys.argv[2:])
     parser = argparse.ArgumentParser(description='Offline native electronic PDF -> manual.md + assets/',
         epilog='Quick start: python scripts/pdf2md.py convert --input manual.pdf\n'
+               'First use: python3 scripts/pdf2md.py setup --check --json\n'
                'Setup and configuration: docs/CONFIGURATION.md', formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--version', action='version', version=__version__)
     sub = parser.add_subparsers(dest='command', required=True)
+    sub.add_parser('setup', help='Prepare the user runtime (run setup --help for installation options)')
     p = sub.add_parser('init-config', help='Write a new deployment config; defaults to the first visible GPU')
     p.add_argument('--config', type=Path, default=Path('runtime.local.json'), help='Output config (default: runtime.local.json)')
     p.add_argument('--parser-python', help='MinerU Python (default: current interpreter or PDF2MD_PARSER_PYTHON)')
@@ -315,7 +320,7 @@ def main():
             if (output / 'source_map.json').is_file():
                 from .source_map import validate
                 mapping = validate(output)['states']
-            elif read(output / 'run_manifest.json')['configuration'].get('version') in ('0.1.0a3', '0.1.0a4'):
+            elif read(output / 'run_manifest.json')['configuration'].get('version') in ('0.1.0a3', '0.1.0a4', '0.1.0a5'):
                 raise ValueError('New-version result is missing source_map.json')
             print(json.dumps({'integrity_passed': True, 'pages': quality['expected_pages'],
                 'image_references': len(assets), 'source_mapping_states': mapping, 'semantic_fidelity_certified': False}))

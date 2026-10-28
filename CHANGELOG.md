@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0a5 - Candidate
+
+- 新增标准库 `setup`：只读检查、一次授权、在线安装和离线导入，分别返回 READY / NEEDS_APPROVAL / NEEDS_ACTION / FAILED。
+- 独立用户级 CPU 或 GPU 协调器/解析器环境；依赖保持锁定，不安装 Python、不修改系统环境。安装日志、断点及并发锁独立保存。
+- GPU 模型使用固定 Hugging Face revision 和原有逐文件 SHA256；全部验证后才生成完成标记。支持下载续传及校验后的离线复制。
+- Debian/Ubuntu 可从受信任的 APT 包元数据下载并校验 bubblewrap，用户级解包，不执行系统安装。
+- 真实合成 PDF 转换、正式校验与来源查询通过后才原子发布配置；普通 Linux/Windows 入口自动找到协调器。
+- Skill 增加新会话只读检查、一次授权后继续原任务的流程。转换保持离线，GPU 安装失败不切换 CPU。
+- 不改变 Worker、模型绑定、转换和质量算法；完整验收矩阵与尚未关闭的门禁另存于仓库外 artifacts。
+
 ## 0.1.0a4 - 2026-10-25
 
 ### Windows Startup
