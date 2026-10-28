@@ -4,24 +4,29 @@
 
 [Changelog](CHANGELOG.md)
 
-Version: **0.1.0a4**. Convert native electronic PDFs to `manual.md + assets/`, with source locations for verification. Supports GPU and CPU execution.
+Version: **0.1.0a5** (candidate). Convert native electronic PDFs to `manual.md + assets/`, with source locations for verification. Supports GPU and CPU execution.
 
 ## Quick Start
 
-Complete the one-time [environment setup](docs/CONFIGURATION.md#environment-setup), activate your Python environment, and run from this directory:
+Give your Agent this prompt:
+
+> Use the Pdf2Md Skill to convert inputs/manual.pdf.
+
+On first use the Agent checks readiness, presents the installation plan and asks for approval once. It then prepares the user runtime and continues conversion. For manual initialization, run from this directory:
 
 ```bash
-python scripts/pdf2md.py convert --input ../manual.pdf
+python3 scripts/pdf2md.py setup
 ```
 
-On Windows, use PowerShell with WSL2 after the one-time WSL environment setup. Windows Python is not needed. The CMD launcher works with the usual Restricted PowerShell execution policy, without changing user or system policy:
+Windows / WSL2, without Windows Python:
 
 ```powershell
-.\scripts\pdf2md.cmd convert --input "D:\Documents\manual.pdf"
-.\scripts\pdf2md.cmd batch --input-dir "D:\Documents\pdfs" --recursive
+.\scripts\pdf2md.cmd setup
 ```
 
-Results are saved to `manual_pdf2md/` beside the PDF. Open `manual.md` and keep `assets/` alongside it when moving the result.
+After setup, run `python3 scripts/pdf2md.py convert --input ../manual.pdf`, or `.\scripts\pdf2md.cmd convert --input "D:\Documents\manual.pdf"` on Windows. No environment activation is needed. Results are saved to `manual_pdf2md/` beside the PDF; keep `assets/` alongside `manual.md`.
+
+Requires Linux/WSL2 and Python 3.12 with venv support. Setup does not install Python or change system settings. Online setup obtains locked packages and bound models; [offline installation and prerequisites](docs/CONFIGURATION.md#environment-setup) are also supported. Conversion remains offline.
 
 Conversion automatically runs environment checks, PDF preflight and output integrity checks. Separate `doctor`, `preflight` and `verify` commands are optional.
 
@@ -30,25 +35,37 @@ GPU is selected when ready; otherwise a prepared CPU backend is used. CPU-only s
 ## Source Lookup
 
 ```bash
-python scripts/pdf2md.py trace --output-dir ../manual_pdf2md --line 25
+python3 scripts/pdf2md.py trace --output-dir ../manual_pdf2md --line 25
 ```
 
 `source_map.json` indexes final output objects. Queries return JSON with the output excerpt, original PDF page/region, source text and association basis. Optional screenshots are generated only when requested; no viewer or full-document screenshot export is created. See [source mapping](docs/SOURCE_MAPPING.md).
+
+## Organization And Local Revision
+
+Organize an existing complete conversion without rerunning the parser:
+
+```bash
+python3 scripts/pdf2md.py organize --from-result ../manual_pdf2md --workspace ../organized
+python3 scripts/pdf2md.py scopes --workspace ../organized
+python3 scripts/pdf2md.py search --workspace ../organized --query DATA_STATUS --match exact
+```
+
+Persistent Units and explicit/inferred/virtual Scopes support source lookup, bounded edits, atomic publication and rollback. Original conversions remain unchanged. See [organization commands](docs/ORGANIZATION.md). Windows uses `.\scripts\pdf2md.cmd`.
 
 ## Common Commands
 
 ```bash
 # Choose an output directory
-python scripts/pdf2md.py convert --input ../manual.pdf --output-dir ../result
+python3 scripts/pdf2md.py convert --input ../manual.pdf --output-dir ../result
 
 # Continue after an interruption
-python scripts/pdf2md.py convert --input ../manual.pdf --resume
+python3 scripts/pdf2md.py convert --input ../manual.pdf --resume
 
 # Convert a directory, including subdirectories
-python scripts/pdf2md.py batch --input-dir ../pdfs --recursive
+python3 scripts/pdf2md.py batch --input-dir ../pdfs --recursive
 
 # Show all options
-python scripts/pdf2md.py convert --help
+python3 scripts/pdf2md.py convert --help
 ```
 
 ## Defaults
@@ -57,8 +74,8 @@ python scripts/pdf2md.py convert --help
 | --- | --- |
 | GPU | First visible GPU; detect device nodes automatically |
 | Compute | `auto`: ready GPU first, otherwise a prepared CPU backend |
-| Backend Python | Current Python environment |
-| Models | `models/` beside the source directory |
+| Backend Python | User runtime saved by setup; current Python for manual deployments |
+| Models | Verified user-managed bundle after setup |
 | Output | `<file-stem-or-directory-name>_pdf2md/` beside the input |
 | Network | Offline; `--offline` is optional |
 | Chunks and retries | 50 pages per chunk; retry once on failure |

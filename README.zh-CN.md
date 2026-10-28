@@ -4,24 +4,29 @@
 
 [更新日志](CHANGELOG.md)
 
-版本：**0.1.0a4**。在本地离线将原生电子 PDF 转成 `manual.md + assets/`，并提供便于核验的来源定位。支持 GPU 和 CPU 运行。
+版本：**0.1.0a5**（候选版）。在本地离线将原生电子 PDF 转成 `manual.md + assets/`，并提供便于核验的来源定位。支持 GPU 和 CPU 运行。
 
 ## 快速开始
 
-首次使用请完成[环境安装](docs/CONFIGURATION.zh-CN.md#环境安装)。激活 Python 环境后，在本目录运行：
+给 Agent 一句提示即可：
+
+> 使用 Pdf2Md Skill 转换 inputs/manual.pdf。
+
+首次使用时，Agent 先检查环境、说明安装方案，获得一次确认后准备用户级环境并继续转换。手动初始化时，在本目录运行：
 
 ```bash
-python scripts/pdf2md.py convert --input ../manual.pdf
+python3 scripts/pdf2md.py setup
 ```
 
-Windows 完成一次 WSL2 环境准备后，可直接在 PowerShell 中运行，无需 Windows Python。CMD 入口可在常见的 PowerShell `Restricted` 策略下启动，不修改用户或系统执行策略：
+Windows / WSL2，无需 Windows Python：
 
 ```powershell
-.\scripts\pdf2md.cmd convert --input "D:\Documents\manual.pdf"
-.\scripts\pdf2md.cmd batch --input-dir "D:\Documents\pdfs" --recursive
+.\scripts\pdf2md.cmd setup
 ```
 
-结果保存在 PDF 同目录的 `manual_pdf2md/` 中，打开其中的 `manual.md` 即可。移动结果时一起保留 `assets/`。
+初始化后，使用 `python3 scripts/pdf2md.py convert --input ../manual.pdf`；Windows 使用 `.\scripts\pdf2md.cmd convert --input "D:\Documents\manual.pdf"`。无需每天激活环境或指定 Python。结果保存在 PDF 同目录的 `manual_pdf2md/` 中，移动 `manual.md` 时一起保留 `assets/`。
+
+需要 Linux/WSL2 及支持 venv 的 Python 3.12。初始化不安装 Python、不修改系统设置；在线获取锁定依赖和绑定模型，也支持[离线导入与系统前提说明](docs/CONFIGURATION.zh-CN.md#环境安装)。文档转换始终离线。
 
 转换会自动执行环境检查、PDF 预检和输出完整性检查，无需另行运行 `doctor`、`preflight` 或 `verify`。
 
@@ -30,25 +35,37 @@ GPU 环境可用时优先使用 GPU，否则使用已准备好的 CPU 后端。C
 ## 来源查询
 
 ```bash
-python scripts/pdf2md.py trace --output-dir ../manual_pdf2md --line 25
+python3 scripts/pdf2md.py trace --output-dir ../manual_pdf2md --line 25
 ```
 
 `source_map.json` 为最终输出对象建立索引。查询返回 JSON，包括输出片段、原 PDF 页码和区域、原文及关联依据。截图按需生成，不附带可视化页面或全文截图。详见[来源映射说明](docs/SOURCE_MAPPING.zh-CN.md)。
+
+## 文档组织与局部修订
+
+已有完整转换结果可直接组织为多文件内容，不重新解析 PDF：
+
+```bash
+python3 scripts/pdf2md.py organize --from-result ../manual_pdf2md --workspace ../organized
+python3 scripts/pdf2md.py scopes --workspace ../organized
+python3 scripts/pdf2md.py search --workspace ../organized --query DATA_STATUS --match exact
+```
+
+没有目录也可使用虚拟 Scope。稳定 Unit 支持来源查询、局部修订、版本发布和回滚。原转换结果保持不变，详见[文档组织说明](docs/ORGANIZATION.zh-CN.md)。Windows 使用 `.\scripts\pdf2md.cmd`。
 
 ## 常用操作
 
 ```bash
 # 指定输出目录
-python scripts/pdf2md.py convert --input ../manual.pdf --output-dir ../result
+python3 scripts/pdf2md.py convert --input ../manual.pdf --output-dir ../result
 
 # 中断后继续
-python scripts/pdf2md.py convert --input ../manual.pdf --resume
+python3 scripts/pdf2md.py convert --input ../manual.pdf --resume
 
 # 批量转换，包含子目录
-python scripts/pdf2md.py batch --input-dir ../pdfs --recursive
+python3 scripts/pdf2md.py batch --input-dir ../pdfs --recursive
 
 # 查看完整参数
-python scripts/pdf2md.py convert --help
+python3 scripts/pdf2md.py convert --help
 ```
 
 ## 默认设置
@@ -57,8 +74,8 @@ python scripts/pdf2md.py convert --help
 | --- | --- |
 | GPU | 第一个可见 GPU，自动确定设备节点 |
 | 计算模式 | `auto`：GPU 可用则优先使用，否则选择已准备好的 CPU 后端 |
-| 后端 Python | 当前 Python 环境 |
-| 模型目录 | 源码目录旁的 `models/` |
+| 后端 Python | 初始化保存的用户级环境；手工部署时使用当前环境 |
+| 模型目录 | 初始化后使用已校验的用户级模型目录 |
 | 输出目录 | 输入旁的 `<文件名或目录名>_pdf2md/` |
 | 网络 | 离线，无需填写 `--offline` |
 | 分块与重试 | 每块 50 页，失败重试 1 次 |

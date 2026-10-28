@@ -10,7 +10,8 @@ import subprocess
 import sys
 
 PATH_OPTIONS = {'--input', '--input-dir', '--output-dir', '--config', '--models', '--report',
-                '--native-cache', '--parser-python', '--coordinator-python', '--cpu-python', '--render-dir', '--bwrap'}
+                '--native-cache', '--parser-python', '--coordinator-python', '--cpu-python', '--render-dir', '--bwrap', '--wheelhouse',
+                '--from-result', '--workspace', '--proposal', '--text-file', '--source-evidence'}
 
 
 def linux_path(value, cwd):
@@ -66,8 +67,9 @@ def select_python(explicit, args, product):
         return value
     sys.path.insert(0, str(product / 'src'))
     from pdf2md_p2.configuration import find_config
-    config = option(args, '--config') if args and args[0] != 'init-config' else None
-    config = Path(config) if config else (find_config() if not args or args[0] != 'init-config' else None)
+    bootstrap = bool(args and args[0] in ('init-config', 'setup'))
+    config = option(args, '--config') if not bootstrap else None
+    config = Path(config) if config else (find_config() if not bootstrap else None)
     if config is not None:
         data = json.loads(config.read_text(encoding='utf-8-sig'))
         if data.get('coordinator_python'):

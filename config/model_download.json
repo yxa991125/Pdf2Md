@@ -1,0 +1,19 @@
+{
+  "repository": "opendatalab/MinerU-4_models_torch",
+  "revision": "2b3afb86f4d23fa623f6b2f4b2279ed4ef93a89d",
+  "sizes": {
+    "Layout/PP-DocLayoutV2/config.json": 3787,
+    "Layout/PP-DocLayoutV2/inference.yml": 1482,
+    "Layout/PP-DocLayoutV2/model.safetensors": 214798436,
+    "Layout/PP-DocLayoutV2/preprocessor_config.json": 575,
+    "MFR/pp_formulanet_plus_m/PP-FormulaNet_plus-M.pth": 617465525,
+    "MFR/pp_formulanet_plus_m/PP-FormulaNet_plus-M_inference.yml": 2243888,
+    "OCR/paddleocr/ch_PP-OCRv6_small_rec_infer.safetensors": 21204736,
+    "OCR/paddleocr/ch_PP-OCRv6_tiny_det_infer.safetensors": 1786412,
+    "OCR/paddleocr/seal_PP-OCRv4_det_infer.pth": 14506268,
+    "README.md": 28,
+    "Table/PP-LCNet_x1_0_table_cls.onnx": 6776877,
+    "Table/slanet-plus.onnx": 7758305,
+    "Table/unet.onnx": 8335007
+  }
+}

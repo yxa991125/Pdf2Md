@@ -4,6 +4,40 @@
 
 ## Environment Setup
 
+### Managed Setup
+
+Run `python3 scripts/pdf2md.py setup`, or `.\scripts\pdf2md.cmd setup` on Windows. The terminal presents a plan and asks once before installing. Agents first use `setup --check --json`, obtain approval, then use `setup --yes`. Without a terminal or `--yes`, setup reports the plan without installing. `--check` is read-only even with `--yes`.
+
+| State | Exit | Meaning |
+| --- | --- | --- |
+| READY | 0 | Selected runtime is ready |
+| NEEDS_APPROVAL | 3 | Installation needs explicit approval |
+| NEEDS_ACTION | 4 | System prerequisite or manual configuration needs attention |
+| FAILED | 1 | Installation or validation failed; retain logs |
+| Argument error | 2 | Invalid command syntax |
+
+JSON goes to stdout; progress and installation output go to stderr. Use `setup --help` for options. Existing hand-written configurations are never overwritten. Configuration precedence remains explicit flag, `PDF2MD_CONFIG`, working-directory/project `runtime.local.json`, then the user configuration. A damaged configuration is an error, not a reason to select another one.
+
+Default locations respect `XDG_DATA_HOME` (`~/.local/share/pdf2md`), `XDG_STATE_HOME` (`~/.local/state/pdf2md`), and `XDG_CONFIG_HOME` (`~/.config/pdf2md/runtime.json`). WSL environments are created on the Linux filesystem, not mounted Windows drives. No environment activation is needed after setup. Setup saves its receipt and full installation/smoke-test logs under the state directory. Retry the same setup command after a failure; only the managed profile is reused. Concurrent setup is refused. Existing results are not changed.
+
+`--compute auto` prepares GPU when hardware is visible, otherwise CPU. A GPU install failure is an error; choosing CPU instead requires an explicit new request. GPU has separate coordinator and parser environments; CPU uses one compatible environment. The runtime inventory's historical `pip==25.0.1` entry is excluded from runtime installation; all runtime pins, including setuptools, remain unchanged. Models come only from the fixed revision in `config/model_download.json`, verified against every SHA256 in `config/baseline_bindings.json`. Online setup uses PyPI and HTTPS Hugging Face, never an unpinned latest model. Package download size is unknown until pip resolves it; GPU packages require several GiB, and the model payload size is reported exactly. Conversion does not access these services.
+
+Offline example, using directories explicitly supplied by the user:
+
+```bash
+python3 scripts/pdf2md.py setup --check --json --compute cuda --offline \
+  --wheelhouse /media/wheels --wheelhouse /media/more-wheels --models /media/models
+# After approval, repeat with --yes instead of --check.
+```
+
+Wheel media must cover the selected requirements locks for Python 3.12/Linux and the current architecture. GPU model media contain `MinerU-4_models_torch/` (or point directly to that folder). Import checks hashes and copies into managed storage, never changes the source medium. CPU requires no GPU model media. Supply a working `--bwrap /path/to/bwrap`, or include the exact distribution `.deb` in a wheelhouse. Without an installed bwrap, Debian/Ubuntu setup can use authenticated official APT metadata, verify the downloaded package hash and extract it in the user directory. It never runs sudo, package maintainer scripts or a system installation. Other distributions need a prepared bwrap.
+
+System prerequisites are Linux/WSL2, Python 3.12 with `venv`/`ensurepip`, suitable dynamic libraries and permitted user/network namespaces. Setup does not download Python or change security policy. On Ubuntu 24.04, an administrator can provide `python3.12-venv`; on Debian 13, provide a separate Python 3.12 rather than using system Python 3.13. Run setup with that interpreter if it is not on PATH. Windows needs a working WSL2 distro (`wsl.exe --list --verbose`); select it with `--wsl-distro NAME`. NVIDIA driver/device permissions must already work for GPU. Restricted PowerShell is handled by the CMD launcher; organization-enforced restrictions require administrator action.
+
+Before publishing a config, setup checks dependency bindings and isolation, converts a synthetic two-page PDF, verifies its result, and queries a mapped source object. GPU additionally requires real CUDA computation evidence. Failed installs retain their logs but do not become the default runtime. A new implementation fingerprint triggers managed validation again; environments are never published by renaming a venv.
+
+### Manual Deployments
+
 Use Linux/WSL2, Python 3.12 and bubblewrap (`bwrap`) with user/network namespace support. GPU execution additionally needs NVIDIA CUDA support. Windows uses the PowerShell WSL2 launcher.
 
 ### CPU-Only Setup
@@ -12,7 +46,7 @@ Use Linux/WSL2, Python 3.12 and bubblewrap (`bwrap`) with user/network namespace
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements-cpu.txt
-python scripts/pdf2md.py convert --input ../manual.pdf
+python3 scripts/pdf2md.py convert --input ../manual.pdf
 ```
 
 This environment includes the coordinator and the pinned CPU backend. CUDA, MinerU and a separate GPU model directory are not required. The pinned Layout wheel includes its model resources; conversion does not download weights. For offline installation, add `--no-index` and `--find-links /path/to/wheelhouse` to the installation command.
@@ -67,7 +101,7 @@ Keep existing GPU environments unchanged. To add CPU support alongside one, prep
 `doctor` reports CPU/GPU availability and selection reasons. No available backend triggers installation automatically. Resume and cache reuse retain the original selected backend and bindings; changing compute mode requires a new output. The existing repeated `--device /dev/...` option still authorizes GPU nodes; it is not a compute-mode flag. Windows also translates `--cpu-python` and `--render-dir`, and forwards `PDF2MD_CPU_PYTHON`.
 
 ```bash
-python scripts/pdf2md.py convert --input ../manual.pdf \
+python3 scripts/pdf2md.py convert --input ../manual.pdf \
   --models /path/to/models --parser-python /path/to/env-mineru/bin/python
 ```
 
@@ -78,7 +112,7 @@ python scripts/pdf2md.py convert --input ../manual.pdf \
 To reuse custom paths, generate a config file:
 
 ```bash
-python scripts/pdf2md.py init-config \
+python3 scripts/pdf2md.py init-config \
   --parser-python /path/to/env-mineru/bin/python --models /path/to/models
 ```
 
@@ -92,16 +126,16 @@ Setting precedence: command-line overrides > config file > environment variables
 
 ```bash
 # Check the environment without inference
-python scripts/pdf2md.py doctor
+python3 scripts/pdf2md.py doctor
 
 # Inspect only the input PDF
-python scripts/pdf2md.py preflight --input ../manual.pdf
+python3 scripts/pdf2md.py preflight --input ../manual.pdf
 
 # Recheck a result's seal, page sequence and images
-python scripts/pdf2md.py verify --output-dir ../manual_pdf2md
+python3 scripts/pdf2md.py verify --output-dir ../manual_pdf2md
 
 # Resume a batch
-python scripts/pdf2md.py batch --input-dir ../pdfs --recursive --resume
+python3 scripts/pdf2md.py batch --input-dir ../pdfs --recursive --resume
 ```
 
 `convert --native-cache /path/to/previous-result` reuses compatible sealed chunks generated by this tool, skipping their inference. Resume and cache reuse check input, implementation, configuration and environment bindings. Use a new output directory when the input set changes.

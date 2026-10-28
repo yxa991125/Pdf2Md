@@ -221,11 +221,17 @@ def convert(args):
 
 
 def main():
+    if sys.argv[1:2] == ['setup']:
+        from .setup import main as setup
+        return setup(sys.argv[2:])
     parser = argparse.ArgumentParser(description='Offline native electronic PDF -> manual.md + assets/',
         epilog='Quick start: python scripts/pdf2md.py convert --input manual.pdf\n'
+               'First use: python3 scripts/pdf2md.py setup --check --json\n'
                'Setup and configuration: docs/CONFIGURATION.md', formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--version', action='version', version=__version__)
     sub = parser.add_subparsers(dest='command', required=True)
+    from . import organization_cli
+    sub.add_parser('setup', help='Prepare the user runtime (run setup --help for installation options)')
     p = sub.add_parser('init-config', help='Write a new deployment config; defaults to the first visible GPU')
     p.add_argument('--config', type=Path, default=Path('runtime.local.json'), help='Output config (default: runtime.local.json)')
     p.add_argument('--parser-python', help='MinerU Python (default: current interpreter or PDF2MD_PARSER_PYTHON)')
@@ -242,12 +248,19 @@ def main():
     p = sub.add_parser('preflight', help='Inspect a PDF without loading models or using GPU')
     p.add_argument('--input', type=Path, required=True)
     p = sub.add_parser('verify', help='Verify a completed output seal and all local image references, not semantic fidelity')
-    p.add_argument('--output-dir', type=Path, required=True)
+    destination = p.add_mutually_exclusive_group(required=True)
+    destination.add_argument('--output-dir', type=Path)
+    destination.add_argument('--workspace', type=Path, help='Verify an organized document revision')
+    p.add_argument('--revision', help='Workspace revision (default: current HEAD)')
     p = sub.add_parser('trace', help='Query source locations for a final Markdown object or line; JSON output')
-    p.add_argument('--output-dir', type=Path, required=True)
+    destination = p.add_mutually_exclusive_group(required=True)
+    destination.add_argument('--output-dir', type=Path)
+    destination.add_argument('--workspace', type=Path, help='Read a Unit in an organized document')
+    p.add_argument('--revision', help='Workspace revision (default: current HEAD)')
     query = p.add_mutually_exclusive_group(required=True)
     query.add_argument('--object-id')
     query.add_argument('--line', type=int)
+    query.add_argument('--unit-id', help='Stable organized Unit ID; requires --workspace')
     p.add_argument('--input', type=Path, help='Exact original PDF, required only for source screenshots')
     p.add_argument('--render-dir', type=Path, help='New external directory for requested source screenshots')
     p = sub.add_parser('batch', help='Convert a local PDF directory sequentially, preserving failures and per-run logs')
@@ -266,10 +279,16 @@ def main():
     p.add_argument('--native-cache', type=Path, help='Explicit read-only own-worker cache; no new inference is claimed')
     p.add_argument('--chunk-size', type=int)
     p.add_argument('--max-retries', type=int)
+    organization_cli.register(sub)
     args = parser.parse_args()
+    organization_cli.validate_args(args, parser)
     if (getattr(args, 'chunk_size', None) is not None and args.chunk_size <= 0) or (getattr(args, 'max_retries', None) is not None and args.max_retries < 0):
         parser.error('Chunk size must be positive; retries must be nonnegative')
     try:
+        organized_result = organization_cli.dispatch(args)
+        if organized_result is not None:
+            print(json.dumps(organized_result, ensure_ascii=False, indent=2))
+            return 0
         if args.command == 'init-config':
             if args.config.exists():
                 raise ValueError('Config exists; refusing overwrite')
@@ -315,7 +334,7 @@ def main():
             if (output / 'source_map.json').is_file():
                 from .source_map import validate
                 mapping = validate(output)['states']
-            elif read(output / 'run_manifest.json')['configuration'].get('version') in ('0.1.0a3', '0.1.0a4'):
+            elif read(output / 'run_manifest.json')['configuration'].get('version') in ('0.1.0a3', '0.1.0a4', '0.1.0a5'):
                 raise ValueError('New-version result is missing source_map.json')
             print(json.dumps({'integrity_passed': True, 'pages': quality['expected_pages'],
                 'image_references': len(assets), 'source_mapping_states': mapping, 'semantic_fidelity_certified': False}))

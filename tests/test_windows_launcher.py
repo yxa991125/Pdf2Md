@@ -78,5 +78,23 @@ class RestrictedLauncherTests(unittest.TestCase):
                 self.launch(['batch', '--input-dir', 'D:\\pdfs'], code)
 
 
+@unittest.skipUnless(os.name == 'nt', 'Windows setup prerequisites')
+class SetupPrerequisiteTests(unittest.TestCase):
+    def test_missing_wsl_is_json_action_under_restricted(self):
+        env = dict(os.environ, PATH='', PDF2MD_TEST_LAUNCHER=str(PRODUCT / 'scripts/pdf2md.cmd'))
+        command = '& $env:PDF2MD_TEST_LAUNCHER setup --check --json; exit $LASTEXITCODE'
+        powershell = str(Path(os.environ['SystemRoot']) / 'System32/WindowsPowerShell/v1.0/powershell.exe')
+        result = subprocess.run([powershell, '-NoProfile', '-ExecutionPolicy', 'Restricted', '-Command', command],
+            env=env, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 4, result.stderr)
+        self.assertEqual(json.loads(result.stdout.decode('utf-8-sig'))['status'], 'NEEDS_ACTION')
+
+    def test_missing_windows_option_value_is_argument_error(self):
+        env = dict(os.environ, PDF2MD_TEST_LAUNCHER=str(PRODUCT / 'scripts/pdf2md.cmd'))
+        result = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Restricted', '-Command',
+            '& $env:PDF2MD_TEST_LAUNCHER setup --wsl-distro; exit $LASTEXITCODE'], env=env, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 2, result.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()
