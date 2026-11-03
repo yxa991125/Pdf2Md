@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0a6 - Candidate
+
+- Render undecodable native text fragments on rotated PDF pages without text OCR.
+- Keep displayed crop coordinates separate from unrotated source-map coordinates;
+  record the page rotation and both coordinate systems in `source_glyphs.json`.
+- Retain validation of invalid regions and duplicate markers. Worker, model bindings,
+  and parsing policy are unchanged; earlier results remain independently verifiable.
+- Require source maps for the current candidate in `verify`, retaining validation
+  requirements for a3 through a5 and compatibility with older results.
+
 ## 0.1.0a5 - Candidate
 
 - 新增标准库 `setup`：只读检查、一次授权、在线安装和离线导入，分别返回 READY / NEEDS_APPROVAL / NEEDS_ACTION / FAILED。

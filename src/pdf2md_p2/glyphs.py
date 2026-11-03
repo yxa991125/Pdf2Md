@@ -1,6 +1,7 @@
 """Render undecodable native glyphs at their existing inline positions, without OCR."""
 
 from collections import Counter
+import math
 
 import pymupdf
 
@@ -21,11 +22,24 @@ def materialize(pdf, text, events, output):
             if count > 1:
                 raise ValueError('Source glyph marker is multiply bound to native Markdown')
             page = document[event['page'] - 1]
-            if page.rotation:
-                raise ValueError('Rotated undecodable glyph requires separately validated geometry')
-            bbox = (pymupdf.Rect(event['source_bbox_points']) + (-1, -1, 1, 1)) & page.rect
+            coordinates = event['source_bbox_points']
+            if (len(coordinates) != 4 or any(not isinstance(v, (int, float)) or not math.isfinite(v)
+                                            for v in coordinates)):
+                raise ValueError('Invalid glyph source frame')
+            frame = pymupdf.Rect(coordinates)
+            if frame.is_empty or frame.is_infinite or not frame.intersects(page.rect):
+                raise ValueError('Invalid glyph source frame')
+            # MinerU spans use the displayed page; source-map boxes use the
+            # unrotated page. Rendering and text extraction need different boxes.
+            bbox = (frame + (-1, -1, 1, 1)) & page.rect
             if bbox.is_empty or bbox.is_infinite:
                 raise ValueError('Invalid glyph source frame')
+            source_bbox = bbox * page.derotation_matrix if page.rotation else bbox
+            geometry = {'source_bbox': list(source_bbox),
+                        'source_coordinate_system': 'unrotated_page_top_left_pdf_points',
+                        'render_bbox': list(bbox),
+                        'render_coordinate_system': 'rotated_page_top_left_pdf_points',
+                        'page_rotation': page.rotation}
             relative = 'assets/source-glyph-' + marker[-24:].lower() + '.png'
             path = output / relative
             html = f'<img src="{relative}" width="{round(bbox.width, 2)}" height="{round(bbox.height, 2)}" alt="Source glyph region; not editable text">'
@@ -34,7 +48,7 @@ def materialize(pdf, text, events, output):
                 start, before, after = text.index(marker), marker, html
                 text = text.replace(marker, html, 1)
             else:
-                source_text = page.get_text(clip=bbox).strip()
+                source_text = page.get_text(clip=source_bbox).strip()
                 key = lambda value: ' '.join(re.sub(r'<[^>]+>', ' ', value).replace('\\_', '_').split())
                 markers = list(PAGE.finditer(text))
                 index = next(i for i, m in enumerate(markers) if int(m[1]) == event['page'])
@@ -42,7 +56,7 @@ def materialize(pdf, text, events, output):
                 body = text[markers[index].end():end]
                 if source_text and key(source_text) in key(body):
                     records.append({'page': event['page'], 'kind': 'SOURCE_NATIVE_TEXT_ALREADY_PRESENT',
-                                    'source_bbox': list(bbox), 'automatic_addition': False})
+                                    **geometry, 'automatic_addition': False})
                     continue
                 # A native discarded/merged span has no trustworthy inline locus. Keep
                 # its source fragment page-scoped, without inventing a semantic anchor.
@@ -50,7 +64,7 @@ def materialize(pdf, text, events, output):
                 start, before, after = end, '', '\n\n' + html + '\n\n'
                 placement = 'PAGE_SCOPED_SOURCE_FRAGMENT_ASSOCIATION_UNRESOLVED'
             page.get_pixmap(clip=bbox, matrix=pymupdf.Matrix(4, 4), alpha=False).save(path)
-            records.append({'page': event['page'], 'source_bbox': list(bbox), 'raster_scale': 4,
+            records.append({'page': event['page'], **geometry, 'raster_scale': 4,
                 'asset': relative, 'sha256': sha(path), 'native_marker': marker, 'replacement': html,
                 'kind': 'SOURCE_GLYPH_IMAGE_AT_NATIVE_SPAN', 'complete_formula_or_figure_claim': False,
                 'placement': placement,
