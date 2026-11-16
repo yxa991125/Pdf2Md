@@ -46,6 +46,21 @@ def default_output(source, batch=False):
 
 
 def convert(args):
+    if os.environ.get('P2_ISOLATED') != '1':
+        pdf = args.input.resolve()
+        output = (args.output_dir or default_output(pdf)).resolve()
+        if not pdf.is_file():
+            raise ValueError('Input PDF missing: ' + str(pdf))
+        if pdf.is_relative_to(output) or output == PRODUCT or output.is_relative_to(PRODUCT):
+            raise ValueError('Output must not contain source PDF or be inside the product distribution')
+        from .fidelity_pipeline import pipeline_lock, recover
+        with pipeline_lock(output):
+            recover(output, pdf, args.resume)
+            return _convert(args)
+    return _convert(args)
+
+
+def _convert(args):
     pdf = args.input.resolve()
     if not pdf.is_file():
         raise ValueError('Input PDF missing: ' + str(pdf))
@@ -78,12 +93,24 @@ def convert(args):
         for name in ('chunk_size', 'max_retries'):
             if getattr(args, name) is not None:
                 remaining += ['--' + name.replace('_', '-'), str(getattr(args, name))]
+        remaining += ['--fidelity', getattr(args, 'fidelity', 'off')]
         command = coordinator(config, pdf, output, remaining, args.native_cache.resolve() if args.native_cache else None)
         command[1:1] = ['--setenv', 'PDF2MD_ENVIRONMENT_FINGERPRINT', environment['environment_fingerprint']]
         # The outer process does no PDF processing and never imports benchmark modules.
         result = subprocess.run(command)
         if result.returncode == 0:
-            print(json.dumps({'output': str(output), 'manual': str(output / 'manual.md')}), flush=True)
+            enhanced = None
+            if getattr(args, 'fidelity', 'off') != 'off':
+                from .fidelity_pipeline import finish
+                enhanced = finish(config, pdf, output, args.fidelity)
+            print(json.dumps({'output': str(output), 'manual': str(output / 'manual.md'),
+                              'fidelity': enhanced}), flush=True)
+            from .preservation import validate as validate_preservation
+            preservation = validate_preservation(output)
+            if preservation is not None and not preservation['content_gate_passed']:
+                print(json.dumps({'status': 'CONTENT_REVIEW_REQUIRED',
+                    'content_preservation': preservation}), flush=True)
+                return 2
         return result.returncode
     from .assets import check as check_assets
     from .identifiers import check as check_identifiers
@@ -98,7 +125,9 @@ def convert(args):
     if any(probes.values()):
         raise ValueError('Source-only isolation failed')
     binding = {'version': __version__, 'input_sha256': sha(pdf), 'configuration': config,
+               'source_preservation_version': 'source-preservation-2',
                'implementation': implementation(), 'native_cache_requested': bool(args.native_cache),
+               'fidelity_mode': getattr(args, 'fidelity', 'off'),
                'environment_fingerprint': os.environ['PDF2MD_ENVIRONMENT_FINGERPRINT']}
     if (output / 'run_manifest.json').exists():
         if not args.resume or read(output / 'run_manifest.json')['configuration'] != binding:
@@ -107,6 +136,9 @@ def convert(args):
         if (output / 'source_map.json').is_file():
             from .source_map import validate
             validate(output)
+        if (output / 'fidelity_binding.json').is_file():
+            from .fidelity_result import validate_result
+            validate_result(output)
         print(__import__('json').dumps({'status': 'REUSED_VERIFIED', 'output': str(output)}), flush=True)
         return 0
     import fcntl
@@ -143,6 +175,8 @@ def convert(args):
             native_text, glyph_records = source_glyphs(pdf, native_text, policy_events, output)
             (output / 'native_before_source_text.md').write_text(native_text, encoding='utf-8')
             native_text, text_page_records = recover_text_pages(pdf, native_text, output)
+            from .preservation import preserve
+            native_text, preservation = preserve(pdf, native_text, output, chunks)
             (output / 'native_manual.md').write_text(native_text, encoding='utf-8')
             identifiers = check_identifiers(pdf, native_text)
             text, changes = repair_identifiers(pdf, native_text, identifiers, output)
@@ -162,10 +196,19 @@ def convert(args):
             glyph_gaps = [event for event in policy_events if event['kind'] == 'NATIVE_GLYPH_UNRESOLVED_NO_OCR']
             complete = list(page_parts(text)) == list(range(1, inspection['pages'] + 1)) and not failures and not content_gaps and not glyph_gaps
             status = 'SUCCESS_WITH_WARNINGS' if complete else ('PARTIAL' if chunks else 'FAILED')
+            if complete and not preservation['content_gate_passed']:
+                status = 'CONTENT_REVIEW_REQUIRED'
             quality = {'status': status, 'version': __version__, 'completed_pages': list(page_parts(text)),
+                       'fidelity_requested': getattr(args, 'fidelity', 'off'),
+                       'fidelity_pending': getattr(args, 'fidelity', 'off') != 'off',
                        'compute': config.get('resolved_compute', 'cuda'), 'source_mapping_states': mapping['states'],
                        'release_level': 'ENGINEERING_TEST_PROTOTYPE', 'semantic_fidelity_certified': False,
                        'expected_pages': inspection['pages'], 'failed_chunks': failures, 'assets': images,
+                       'page_processing': {'processed': len(page_parts(text)), 'expected': inspection['pages'],
+                           'coverage_percent': 100*len(page_parts(text))/inspection['pages'],
+                           'status': 'COMPLETE' if complete else 'PARTIAL'},
+                       'content_preservation': {key: preservation[key] for key in (
+                           'states', 'source_scope', 'whole_document_content_percent', 'content_gate_passed')},
                        'empty_source_content_pages': content_gaps,
                        'native_text_recognition_policy_events': policy_events,
                        'unresolved_native_glyph_spans': glyph_gaps,
@@ -201,6 +244,8 @@ def convert(args):
                  'source_graphic_pages': read(output / 'source_graphics.json')['pages'],
                  'source_glyph_images': glyph_records,
                  'source_only_text_pages': text_page_records,
+                 'source_preservation': {'report': 'source_preservation.json',
+                     'changes': len(preservation['changes']), 'native_inference_repeated': False},
                  'Gold_or_scorer_dependency': False, 'S1_S2_enabled': False,
                  'applied_repairs': changes['operations'], 'baseline_configuration': config['profile'],
                  'native_builtin_recognition': config['legacy_builtin_detection_and_formula_recognition']})
@@ -246,6 +291,13 @@ def main():
     p.add_argument('--report', type=Path)
     p = sub.add_parser('preflight', help='Inspect a PDF without loading models or using GPU')
     p.add_argument('--input', type=Path, required=True)
+    p = sub.add_parser('fidelity', help='Check or repair a sealed result into a new complete result; no repeated inference')
+    p.add_argument('--input', type=Path, help='Exact source PDF; required for check/repair')
+    p.add_argument('--result', type=Path, required=True, help='Existing sealed conversion result')
+    p.add_argument('--mode', choices=('check', 'repair', 'rollback'), default='check')
+    p.add_argument('--output-dir', type=Path, help='New result directory; defaults to a sibling of --result')
+    p.add_argument('--resume', action='store_true')
+    p.add_argument('--config', type=Path, help='Optional deployment config for coordinator Python selection')
     p = sub.add_parser('verify', help='Verify a completed output seal and all local image references, not semantic fidelity')
     p.add_argument('--output-dir', type=Path, required=True)
     p = sub.add_parser('trace', help='Query source locations for a final Markdown object or line; JSON output')
@@ -262,6 +314,8 @@ def main():
     p.add_argument('--offline', action='store_true', default=True, help='Offline execution (always enabled; flag optional)')
     p.add_argument('--recursive', action='store_true')
     p.add_argument('--resume', action='store_true')
+    p.add_argument('--fidelity', choices=('off', 'check', 'repair'), default='repair',
+                   help='Source-grounded checks and verified local repairs (default: repair; off disables F1)')
     p = sub.add_parser('convert', help='Convert a PDF; preflight and integrity checks run automatically')
     runtime_options(p)
     p.add_argument('--input', type=Path, required=True)
@@ -271,10 +325,22 @@ def main():
     p.add_argument('--native-cache', type=Path, help='Explicit read-only own-worker cache; no new inference is claimed')
     p.add_argument('--chunk-size', type=int)
     p.add_argument('--max-retries', type=int)
+    p.add_argument('--fidelity', choices=('off', 'check', 'repair'), default='repair',
+                   help='Source-grounded checks and verified local repairs (default: repair; off disables F1)')
     args = parser.parse_args()
+    if args.command == 'fidelity' and args.mode != 'rollback' and not args.input:
+        parser.error('fidelity check/repair requires --input with the original PDF')
     if (getattr(args, 'chunk_size', None) is not None and args.chunk_size <= 0) or (getattr(args, 'max_retries', None) is not None and args.max_retries < 0):
         parser.error('Chunk size must be positive; retries must be nonnegative')
     try:
+        if args.command == 'fidelity':
+            from .fidelity_result import publish, restore
+            output = args.output_dir or args.result.with_name(args.result.name+'_fidelity_'+args.mode)
+            result = (restore(args.result, output, args.resume) if args.mode == 'rollback' else
+                      publish(args.input, args.result, output, args.mode, args.resume,
+                              inline=os.environ.get('PDF2MD_INLINE_FIDELITY') == '1'))
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         if args.command == 'init-config':
             if args.config.exists():
                 raise ValueError('Config exists; refusing overwrite')
@@ -320,15 +386,35 @@ def main():
             if (output / 'source_map.json').is_file():
                 from .source_map import validate
                 mapping = validate(output)['states']
-            elif read(output / 'run_manifest.json')['configuration'].get('version') in ('0.1.0a3', '0.1.0a4', '0.1.0a5', __version__):
+            elif read(output / 'run_manifest.json')['configuration'].get('version') in ('0.1.0a3', '0.1.0a4', '0.1.0a5', '0.1.0a6', '0.1.0a7', '0.1.0a8', __version__):
                 raise ValueError('New-version result is missing source_map.json')
+            from .fidelity_result import validate_result
+            fidelity = validate_result(output)
+            from .preservation import validate as validate_preservation
+            preservation = validate_preservation(output)
+            if read(output / 'run_manifest.json')['configuration'].get('source_preservation_version') and preservation is None:
+                raise ValueError('Current result is missing source_preservation.json')
             print(json.dumps({'integrity_passed': True, 'pages': quality['expected_pages'],
-                'image_references': len(assets), 'source_mapping_states': mapping, 'semantic_fidelity_certified': False}))
-            return 0
+                'image_references': len(assets), 'source_mapping_states': mapping,
+                'fidelity': fidelity, 'fidelity_pending': bool(quality.get('fidelity_pending')),
+                'page_processing': quality.get('page_processing'), 'content_preservation': preservation,
+                'semantic_fidelity_certified': False}))
+            return 2 if preservation is not None and not preservation['content_gate_passed'] else 0
         if args.command == 'trace':
             from .source_map import trace
+            from .fidelity_result import validate_result
+            validate_result(args.output_dir.resolve())
             result = trace(args.output_dir.resolve(), args.object_id, args.line,
                 args.input.resolve() if args.input else None, args.render_dir.resolve() if args.render_dir else None)
+            assessment_file = args.output_dir.resolve() / 'fidelity_assessment.json'
+            if assessment_file.is_file():
+                assessment = read(assessment_file)
+                ids = {obj['id'] for obj in result['objects']}
+                result['technical_assessment'] = {
+                    'version': assessment['version'],
+                    'records': [r for r in assessment['records'] if r['output_object_id'] in ids],
+                    'repairs': [r for r in read(args.output_dir / 'fidelity_repair_log.json')['operations']
+                                if r['final_output_object_id'] in ids]}
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         if args.command == 'batch':

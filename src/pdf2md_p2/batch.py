@@ -24,7 +24,8 @@ def convert_directory(args):
     if not pdfs:
         raise ValueError('No local PDF files found')
     inputs = [{'path': str(p), 'relative': p.relative_to(source).as_posix(), 'sha256': sha(p)} for p in pdfs]
-    binding = {'inputs': inputs, 'runtime': config, 'implementation': implementation()}
+    binding = {'inputs': inputs, 'runtime': config, 'implementation': implementation(),
+               'fidelity_mode': getattr(args, 'fidelity', 'off')}
     if output.exists() and not args.resume:
         raise ValueError('Batch output exists; use a new directory or explicit --resume')
     output.mkdir(parents=True, exist_ok=True)
@@ -46,7 +47,8 @@ def convert_directory(args):
             attempt = len(list(logs.glob(job + '-*.stdout.log'))) + 1
             command = [config['coordinator_python'], str(PRODUCT / 'scripts/pdf2md.py'), 'convert',
                 '--config', str(runtime_file), '--input', item['path'],
-                '--output-dir', str(destination), '--offline']
+                '--output-dir', str(destination), '--offline',
+                '--fidelity', getattr(args, 'fidelity', 'off')]
             if args.resume:
                 command.append('--resume')
             started = time.monotonic()
@@ -62,10 +64,14 @@ def convert_directory(args):
                 bound = (result.returncode == 0 and seal.is_file()
                     and read(seal)['configuration']['input_sha256'] == item['sha256']
                     and sha(Path(item['path'])) == item['sha256'])
+                if status == 'CONTENT_REVIEW_REQUIRED' and result.returncode == 2 and seal.is_file():
+                    bound = (read(seal)['configuration']['input_sha256'] == item['sha256']
+                             and sha(Path(item['path'])) == item['sha256'])
                 if result.returncode == 0 and not bound:
                     status = 'FAILED_INPUT_BINDING'
                 elif result.returncode != 0 and status in ('SUCCESS', 'SUCCESS_WITH_WARNINGS'):
-                    status = 'FAILED_RESUME_OR_PREFLIGHT'
+                    status = ('FAILED_FIDELITY_RAW_RESULT_RETAINED' if getattr(args, 'fidelity', 'off') != 'off'
+                              and not (destination / 'fidelity_binding.json').exists() else 'FAILED_RESUME_OR_PREFLIGHT')
                 rows.append({**item, 'output': destination.relative_to(output).as_posix(), 'returncode': result.returncode,
                     'status': status, 'wall_seconds': time.monotonic() - started, 'argv': command,
                     'integrity_sealed': bound})
@@ -74,7 +80,7 @@ def convert_directory(args):
             save(output / 'batch_summary.json', {'documents': rows, 'total': len(inputs), 'finished': len(rows),
                 'complete': len(rows) == len(inputs), 'semantic_fidelity_certified': False})
         summary = {'finished_at': datetime.now(timezone.utc).isoformat(), 'documents': rows, 'total': len(inputs),
-            'finished': len(rows), 'complete': True, 'engineering_passed': all(r['integrity_sealed'] for r in rows),
+            'finished': len(rows), 'complete': True, 'engineering_passed': all(r['integrity_sealed'] and r['returncode'] == 0 for r in rows),
             'semantic_fidelity_certified': False}
         attempts = output / 'batch_attempts'
         attempts.mkdir(exist_ok=True)

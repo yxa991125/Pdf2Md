@@ -4,6 +4,12 @@
 
 ## Environment Setup
 
+`convert` and `batch` default to `--fidelity repair`. Use `check` to publish
+source-grounded assessments without editing content, or `off` to disable F1.
+Resume with the same setting, input, implementation and runtime. An F1 failure
+returns nonzero and retains the coherent raw conversion and transaction logs;
+it never publishes mixed Markdown/index versions. See [commands and coverage](FIDELITY.md).
+
 ### Managed Setup
 
 Run `python3 scripts/pdf2md.py setup`, or `.\scripts\pdf2md.cmd setup` on Windows. The terminal presents a plan and asks once before installing. Agents first use `setup --check --json`, obtain approval, then use `setup --yes`. Without a terminal or `--yes`, setup reports the plan without installing. `--check` is read-only even with `--yes`.

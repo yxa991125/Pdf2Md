@@ -164,16 +164,27 @@ def build(pdf, output, chunks):
         native = native_objects(output, chunks, pages)
         for ledger, group, bbox_key in (('source_glyphs.json', 'records', 'source_bbox'),
                                         ('source_graphics.json', 'pages', 'source_bbox'),
-                                        ('source_text_pages.json', 'records', 'source_bbox')):
+                                        ('source_text_pages.json', 'records', 'source_bbox'),
+                                        ('source_preservation.json', 'records', 'source_bbox')):
             if not (output / ledger).is_file():
                 continue
             for row in read(output / ledger)[group]:
                 if row.get('automatic_addition', True) is False:
                     continue
-                native.append({'page': row['page'], 'bbox': row[bbox_key], 'kind': 'image' if row.get('asset') else 'paragraph',
+                if ledger == 'source_preservation.json' and not row.get('serialized'):
+                    continue
+                if ledger == 'source_preservation.json' and row['state'] == 'REBUILT_SOURCE_GRID':
+                    native.extend({'page': row['page'], 'bbox': table['bbox'], 'kind': 'table',
+                        'text': table['serialized'], 'images': [], 'basis': 'SOURCE_PRESERVATION_GEOMETRY'}
+                        for table in row['source_tables'])
+                    continue
+                native.append({'page': row['page'], 'bbox': row[bbox_key],
+                               'kind': 'image' if row.get('asset') else row.get('kind', 'paragraph'),
                                'text': row.get('serialized', ''), 'images': [Path(row['asset']).name] if row.get('asset') else [],
-                               'basis': 'RECORDED_SOURCE_ADDITION'})
+                               'basis': 'SOURCE_PRESERVATION_GEOMETRY' if ledger == 'source_preservation.json' else 'RECORDED_SOURCE_ADDITION'})
         counts = Counter((row['page'], row['kind'], visible(row['text'])) for row in records)
+        from .preservation import bound_objects
+        preserved_bindings = bound_objects(output, text)
         for row in records:
             key, urls = visible(row['text']), {Path(p).name for p in references(row['text'])}
             candidates = []
@@ -184,6 +195,12 @@ def build(pdf, output, chunks):
                     candidates.append(source)
             pdf_matches = [source for source in independent if source['page'] == row['page'] and key
                            and key == ' '.join(source['text'].split())]
+            preserved = [c for c in candidates if c['basis'] == 'SOURCE_PRESERVATION_GEOMETRY']
+            if preserved:
+                candidates = preserved
+            binding = preserved_bindings.get((row['start'], row['end']))
+            if binding and binding['page'] == row['page'] and binding['kind'] == row['kind']:
+                candidates = [binding]
             if not candidates:
                 candidates = pdf_matches
             # Reversible identifier changes retain their independently recorded source locus.
@@ -194,7 +211,7 @@ def build(pdf, output, chunks):
                             'text': edit['source_context'], 'basis': 'RECORDED_SOURCE_BOUND_REPAIR'})
             candidates = [source for source in candidates if valid_bbox(source['bbox'], pages[str(row['page'])])]
             # Duplicated output occurrences cannot claim a single original by text alone.
-            unique = len(candidates) == 1 and counts[(row['page'], row['kind'], key)] == 1
+            unique = len(candidates) == 1 and (binding is not None or counts[(row['page'], row['kind'], key)] == 1)
             if unique and pdf_matches and not any(pymupdf.Rect(candidates[0]['bbox']).intersects(pymupdf.Rect(p['bbox'])) for p in pdf_matches):
                 unique = False
             status = 'UNMAPPED' if not candidates else 'AMBIGUOUS'
@@ -269,6 +286,8 @@ def validate(output):
     actual = {p: sha(within(output, p)) for p in dict.fromkeys(references(text))}
     if actual != data['assets'] or dict(Counter(r['status'] for r in data['objects'])) != data['states']:
         raise ValueError('Source map asset binding or counts differ')
+    from .preservation import validate as validate_preservation
+    validate_preservation(output)
     return data
 
 

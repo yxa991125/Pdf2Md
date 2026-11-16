@@ -123,10 +123,13 @@ class QuickStartCommandTests(unittest.TestCase):
                     patch('pdf2md_p2.environment.inspect', return_value={
                         'ready_for_conversion': True, 'environment_fingerprint': 'test'}) as inspect, \
                     patch.object(cli, 'coordinator', return_value=['sandbox', 'worker']) as worker, \
+                    patch('pdf2md_p2.fidelity_pipeline.finish', return_value={'status': 'PUBLISHED'}) as fidelity, \
                     patch.object(cli.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)):
                 self.assertEqual(self.call('convert', '--input', pdf), 0)
             inspect.assert_called_once_with(config)
             self.assertEqual(worker.call_args.args[2], Path(name) / 'manual_pdf2md')
+            self.assertEqual(worker.call_args.args[3], ['--fidelity', 'repair'])
+            fidelity.assert_called_once_with(config, pdf, Path(name) / 'manual_pdf2md', 'repair')
             self.assertTrue((Path(name) / 'manual_pdf2md/environment_report.json').is_file())
 
     def test_existing_default_output_not_overwritten_or_inferred_again(self):

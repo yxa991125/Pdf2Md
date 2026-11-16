@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.1.0a9 - 2026-11-16
+
+- Publish the standalone conversion improvements developed since a4: one-time
+  runtime setup, rotated-page glyph crops, source-grounded technical checks,
+  table recovery and source-figure preservation. Document splitting/navigation
+  remains on its separate development branch.
+- Expand both READMEs with content-recovery behavior, default result files,
+  source lookup and separate page/content/technical-check summaries.
+
+- Resolve repeated tables using native serialization and source-grid positions;
+  require the full ordered sequence before using duplicate occurrence ranks.
+- Bind each recovered table occurrence to its exact output span and PDF region,
+  including identical tables at different locations and preceding prose edits.
+- Preserve figures whose captions sit outside frames using source drawing
+  clusters, native loci and complete label lines; retain competing cases for review.
+- Validate source-preservation v2 while keeping v1 and earlier sealed results readable.
+
+## 0.1.0a8 - Source Preservation Candidate
+
+- Independently discover native ruled grids and numbered figure panels, including
+  lettered subfigures. Reconstruct uniquely located table rows, columns and spans
+  from PDF cell geometry, preserving native scripts without text OCR.
+- Retain complete framed source figures and unresolved source tables as explicit
+  visual references. Keep original Worker output and per-object recovery evidence.
+- Report page-processing coverage separately from source-object preservation;
+  never report a whole-document content percentage from page counts.
+- Bind recovered objects and images into source maps and result verification.
+
+## 0.1.0a7 - F1 Candidate
+
+- Add source-grounded formula and quantity assessment to normal conversion and
+  batch. Default to independently verified local repairs; retain check-only/off.
+- Preserve signs, ranges and scientific notation, pair quantities by unique
+  source parents, and retain ambiguous list markers and unsupported units.
+- Check supported arithmetic, literal scripts, explicit equation numbers and
+  same-line conditions against native PDF glyph/geometry evidence.
+- Publish a complete derived result with rebound source locations, technical
+  records, exact diffs, original metadata and whole-result rollback.
+- Retain raw results on failure, single-writer/resume bindings and compatible
+  sealed native-cache reuse. Source-only F1 uses no GPU, model or network.
+
 ## 0.1.0a6 - Candidate
 
 - Render undecodable native text fragments on rotated PDF pages without text OCR.

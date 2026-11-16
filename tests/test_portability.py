@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 
 from pdf2md_p2 import configuration, environment
-from pdf2md_p2.common import PRODUCT, save, sha
+from pdf2md_p2.common import PRODUCT, read, save, sha
 
 UUID = 'GPU-11111111-1111-1111-1111-111111111111'
 MIG = 'MIG-22222222-2222-2222-2222-222222222222'
@@ -272,6 +272,34 @@ class BatchTests(unittest.TestCase):
             row, = json.loads((root / 'outputs/batch_summary.json').read_text())['documents']
             self.assertEqual(row['status'], 'FAILED_INPUT_BINDING')
             self.assertFalse(row['integrity_sealed'])
+
+    def test_content_review_is_sealed_but_not_success_and_later_jobs_continue(self):
+        from pdf2md_p2 import batch
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            inputs = root / 'inputs'
+            inputs.mkdir()
+            for name in ('a.pdf', 'b.pdf'):
+                (inputs / name).write_bytes(name.encode())
+            runtime = root / 'runtime.json'
+            save(runtime, config())
+            args = SimpleNamespace(input_dir=inputs, output_dir=root / 'outputs', config=runtime,
+                recursive=False, resume=False)
+            calls = []
+            def run(argv, **kwargs):
+                source = Path(argv[argv.index('--input') + 1])
+                output = Path(argv[argv.index('--output-dir') + 1])
+                calls.append(source.name)
+                review = source.name == 'a.pdf'
+                save(output / 'run_status.json', {'status': 'CONTENT_REVIEW_REQUIRED' if review else 'SUCCESS_WITH_WARNINGS'})
+                save(output / 'run_manifest.json', {'configuration': {'input_sha256': sha(source)}})
+                return subprocess.CompletedProcess(argv, 2 if review else 0)
+            with patch.object(batch.subprocess, 'run', side_effect=run):
+                self.assertEqual(batch.convert_directory(args), 2)
+            summary = read(root / 'outputs/batch_summary.json')
+            self.assertEqual(calls, ['a.pdf', 'b.pdf'])
+            self.assertTrue(all(row['integrity_sealed'] for row in summary['documents']))
+            self.assertFalse(summary['engineering_passed'])
 
 
 if __name__ == '__main__':

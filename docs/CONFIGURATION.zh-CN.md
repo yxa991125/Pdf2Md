@@ -4,6 +4,10 @@
 
 ## 环境安装
 
+`convert` 与 `batch` 默认使用 `--fidelity repair`。`check` 只检查不修改正文，
+`off` 关闭 F1。续跑保持相同模式、输入、源码和运行环境。F1 失败时返回非零退出码，
+保留完整原始结果和事务日志，不发布正文与索引混合的版本。详见[技术检查与恢复](FIDELITY.zh-CN.md)。
+
 ### 用户级初始化
 
 Linux 运行 `python3 scripts/pdf2md.py setup`，Windows 运行 `.\scripts\pdf2md.cmd setup`。终端展示方案并询问一次；Agent 先运行 `setup --check --json`，获得授权后改用 `setup --yes`。非交互环境没有 `--yes` 时不会安装；`--check` 即使同时带有 `--yes` 也只读检查。

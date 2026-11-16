@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import sys
 
-PATH_OPTIONS = {'--input', '--input-dir', '--output-dir', '--config', '--models', '--report',
+PATH_OPTIONS = {'--input', '--input-dir', '--output-dir', '--result', '--config', '--models', '--report',
                 '--native-cache', '--parser-python', '--coordinator-python', '--cpu-python', '--render-dir', '--bwrap', '--wheelhouse'}
 
 
